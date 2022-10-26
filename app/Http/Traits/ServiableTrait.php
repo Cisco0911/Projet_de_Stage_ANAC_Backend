@@ -10,7 +10,8 @@ use App\Models\Serviable;
 
 
 
-trait ServiableTrait {
+trait ServiableTrait 
+{
 
     
     public function add_to_services($services, $serviable_id, $serviable_type) {

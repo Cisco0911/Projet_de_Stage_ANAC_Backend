@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\NcController;
 use App\Notifications\RemovalResponse;
+use App\Http\Controllers\NodeController;
 use App\Http\Controllers\AuditController;
 use Illuminate\Support\Facades\Broadcast;
 use App\Http\Controllers\FichierController;
@@ -141,6 +142,7 @@ Route::middleware('auth:sanctum')->group(
         Route::get('get_ds', [DossierSimpleController::class, 'get_ds']);
         Route::post('add_folder', [DossierSimpleController::class, 'add_folder']);
         Route::delete('del_folder', [DossierSimpleController::class, 'del_folder']);
+        Route::get('test', [DossierSimpleController::class, 'test']);
 
 
 
@@ -164,6 +166,11 @@ Route::middleware('auth:sanctum')->group(
 
         //Notification
         Route::post('notify_response', [OperationNotificationController::class, 'notify_response']);
+
+
+
+        //Editor
+        Route::post('handle_edit', [NodeController::class, 'handle_edit']);
 
 
         

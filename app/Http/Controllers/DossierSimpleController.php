@@ -276,5 +276,9 @@ class DossierSimpleController extends Controller
 
     }
 
+    public function test()
+    {
+        return 'test Réussi';
+    }
 
 }

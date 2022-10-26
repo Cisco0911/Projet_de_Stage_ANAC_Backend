@@ -32,33 +32,6 @@ class AuditController extends Controller
 
         $node = json_decode($element);
 
-        // switch ($element->parent_type) {
-        //     case "App\Models\Audit":
-        //         $node->parent_type = 'audit';
-        //         break;
-        //     case "App\Models\checkList":
-        //         $node->parent_type = 'checkList';
-        //         break;
-        //     case "App\Models\DossierPreuve":
-        //         $node->parent_type = 'dp';
-        //         break;
-        //     case "App\Models\Nc":
-        //         $node->parent_type = 'nonC';
-        //         break;
-        //     case "App\Models\NonConformite":
-        //         $node->parent_type = 'fnc';
-        //         break;
-        //     case "App\Models\DossierSimple":
-        //         $node->parent_type = 'ds';
-        //         break;
-            
-        //     default:
-        //         $node->parent_type = '';
-        //         break;
-        // }
-
-        // $node->url = "http://localhost/overview_of?id=".$element->id;
-
         return $node;
     }
 
