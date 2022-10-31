@@ -49,7 +49,7 @@ class DossierSimpleController extends Controller
             case "App\Models\DossierSimple":
                 $node->parent_type = 'ds';
                 break;
-            
+
             default:
                 $node->parent_type = '';
                 break;
@@ -88,7 +88,7 @@ class DossierSimpleController extends Controller
         //     case "App\Models\DossierSimple":
         //         $type = 'ds';
         //         break;
-            
+
         //     default:
         //         $type = '';
         //         break;
@@ -104,7 +104,7 @@ class DossierSimpleController extends Controller
 
     public function add_folder(Request $request)
     {
-        
+
         DB::beginTransaction();
 
         $saved = true;
@@ -112,7 +112,7 @@ class DossierSimpleController extends Controller
 
         try {
             //code...
-            
+
             $request->validate([
                 'section_id' => ['required', 'integer'],
                 'name' => ['required', 'string', 'max:255'],
@@ -142,11 +142,11 @@ class DossierSimpleController extends Controller
                     ]
                 );
                 if (Storage::makeDirectory("public\\".$path_value)) {
-        
+
                     $services = json_decode($request->services);
 
                     $this->add_to_services($services, $new_folder->id, 'App\Models\DossierSimple');
-        
+
                     // foreach($services as $service)
                     // {
                     //     Serviable::create(
@@ -160,7 +160,7 @@ class DossierSimpleController extends Controller
                 }
                 else {
                     $saved = false;
-                    $errorResponse = ["msg" => "storingError", "value" => "Error : Creating folder not work, return false"];
+                    $errorResponse = ["msg" => "storingError", "value" => "Error : Creating folder not work, return false. Path: "."public\\".$path_value];
                 }
 
             }
@@ -170,17 +170,17 @@ class DossierSimpleController extends Controller
                 $errorResponse = "existAlready";
             }
 
-            
-        } 
+
+        }
         catch (\Throwable $th) {
             //throw $th;
             $saved = false;
             $errorResponse = ["msg" => "catchException", "value" => $th];
         }
-        
+
         if($saved)
         {
-            DB::commit(); // YES --> finalize it 
+            DB::commit(); // YES --> finalize it
             NodeUpdateEvent::dispatch('ds', [$new_folder->id.'-ds'], "add");
         }
         else
@@ -189,17 +189,17 @@ class DossierSimpleController extends Controller
         }
 
         // DB::endTransaction();
-        
+
         $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
-        
+
         return $saved ? $new_folder : $errorResponse ;
-        
+
     }
-    
+
 
     public function del_folder(Request $request)
     {
-        
+
         DB::beginTransaction();
 
         $goesWell = true;
@@ -207,14 +207,14 @@ class DossierSimpleController extends Controller
         $cache = null;
 
 
-        try 
+        try
         {
 
             $target = DossierSimple::find($request->id);
 
             $cache = $this->format($target);
 
-            if(Auth::user()->validator_id == null || $request->approved)
+            if(Auth::user()->validator_id == null)
             {
 
                 // dd($request);
@@ -227,7 +227,7 @@ class DossierSimpleController extends Controller
 
                 $target->delete();
             }
-            else 
+            else
             {
                 try {
                     $new_operation = operationNotification::create(
@@ -241,9 +241,9 @@ class DossierSimpleController extends Controller
                     );
                 } catch (\Throwable $th) {
                     return \response('en attente', 500);
-                    
+
                 }
-                
+
                 $new_operation->operable;
                 $new_operation->front_type = 'ds';
                 Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Dossier', $new_operation, Auth::user()));
@@ -252,25 +252,25 @@ class DossierSimpleController extends Controller
             }
             // RemovalEvent::dispatch('Dossier', $cache, Auth::user());
 
-        } 
-        catch (\Throwable $th) 
+        }
+        catch (\Throwable $th)
         {
             //throw $th;
             $goesWell = false;
         }
-        
+
         if($goesWell)
         {
             Storage::deleteDirectory($pathInStorage);
-            DB::commit(); // YES --> finalize it 
+            DB::commit(); // YES --> finalize it
             NodeUpdateEvent::dispatch('ds', $cache, "delete");
-            
+
             return $target;
         }
         else
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
-            
+
             return \response($th, 500);
         }
 
