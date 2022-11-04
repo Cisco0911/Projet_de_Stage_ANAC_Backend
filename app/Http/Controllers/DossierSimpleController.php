@@ -65,35 +65,6 @@ class DossierSimpleController extends Controller
        foreach ($ds as $key => $dossier) {
         # code...
 
-        // $dossier->services;
-
-        // $type = $ds[$key]->parent_type;
-
-        // switch ($type) {
-        //     case "App\Models\Audit":
-        //         $type = 'audit';
-        //         break;
-        //     case "App\Models\checkList":
-        //         $type = 'checkList';
-        //         break;
-        //     case "App\Models\DossierPreuve":
-        //         $type = 'dp';
-        //         break;
-        //     case "App\Models\Nc":
-        //         $type = 'nonC';
-        //         break;
-        //     case "App\Models\NonConformite":
-        //         $type = 'fnc';
-        //         break;
-        //     case "App\Models\DossierSimple":
-        //         $type = 'ds';
-        //         break;
-
-        //     default:
-        //         $type = '';
-        //         break;
-        // }
-
         $ds[$key] = $this->format($dossier);
 
        }

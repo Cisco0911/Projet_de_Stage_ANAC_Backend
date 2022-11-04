@@ -47,7 +47,7 @@ class FichierController extends Controller
             case "App\Models\DossierSimple":
                 $node->parent_type = 'ds';
                 break;
-            
+
             default:
                 $node->parent_type = '';
                 break;
@@ -89,7 +89,7 @@ class FichierController extends Controller
         //     case "App\Models\DossierSimple":
         //         $type = 'ds';
         //         break;
-            
+
         //     default:
         //         $type = '';
         //         break;
@@ -113,7 +113,7 @@ class FichierController extends Controller
 
     public function add_files(Request $request)
     {
-        
+
         DB::beginTransaction();
 
         $saved = true;
@@ -127,7 +127,7 @@ class FichierController extends Controller
             //code...
 
             // dd($request);
-                
+
             $request->validate([
                 'section_id' => ['required', 'integer'],
                 'fichiers' => ['required', 'array'],
@@ -194,13 +194,13 @@ class FichierController extends Controller
                         ]
                     );
 
-                
+
                     if (Storage::putFileAs("public\\".$dir, $file, $full_name)) {
-                        
+
                         $services = json_decode($request->services);
 
                         $this->add_to_services($services, $new_file->id, 'App\Models\Fichier');
-            
+
                         array_push($added_files, "public\\".$path->value);
                         array_push($new_files, $new_file);
                     }
@@ -220,17 +220,17 @@ class FichierController extends Controller
                 if(!is_null($double)) array_push($duplicated_files, $double);
             }
 
-            
-        } 
+
+        }
         catch (\Throwable $th) {
             //throw $th;
             $saved = false;
-            $errorResponse = ["msg" => "catchException", "value" => $th];
+            $errorResponse = ["msg" => "catchException File", "value" => $th];
         }
-        
+
         if($saved)
         {
-            DB::commit(); // YES --> finalize it 
+            DB::commit(); // YES --> finalize it
             // $new_file->url = "http://localhost/overview_of?id=".$new_file->id;
             // $new_file->parent_type = "llllo";
 
@@ -247,16 +247,16 @@ class FichierController extends Controller
         // DB::endTransaction();
 
         $good = empty($duplicated_files) ? "ok" : ['msg' => 'duplicated', 'value' => $duplicated_files];
-        
+
         $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
-        
+
         return $saved ? $good : $errorResponse ;
-        
+
     }
 
     function del_file(Request $request)
     {
-        
+
         DB::beginTransaction();
 
         $goesWell = true;
@@ -274,12 +274,12 @@ class FichierController extends Controller
             {
 
                 // dd($request);
-    
+
                 $pathInStorage = "public\\".$target->path->value;
-    
+
                 $target->delete();
             }
-            else 
+            else
             {
                 try {
                     $new_operation = operationNotification::create(
@@ -293,9 +293,9 @@ class FichierController extends Controller
                     );
                 } catch (\Throwable $th) {
                     return \response('en attente', 500);
-                    
+
                 }
-                
+
                 $new_operation->operable;
                 $new_operation->front_type = 'f';
                 Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Fichier', $new_operation, Auth::user()));
@@ -307,19 +307,19 @@ class FichierController extends Controller
             //throw $th;
             $goesWell = false;
         }
-        
+
         if($goesWell)
         {
             Storage::delete($pathInStorage);
-            DB::commit(); // YES --> finalize it 
+            DB::commit(); // YES --> finalize it
             NodeUpdateEvent::dispatch('f', $cache, 'delete');
-            
+
             return $target;
         }
         else
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
-            
+
             return \response($th, 500);
         }
 

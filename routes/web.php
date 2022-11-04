@@ -74,7 +74,7 @@ Route::post('/login', [AuthenticatedSessionController::class, 'store'])
                 'guest:'.config('fortify.guard'),
                 $limiter ? 'throttle:'.$limiter : null,
             ]));
-    
+
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->name('logout');
 
@@ -152,13 +152,13 @@ Route::middleware('auth:sanctum')->group(
 
 
 
-        // Fichier de preuve 
+        // Fichier de preuve
         // Route::get('get_fdps', [FichierDePreuveController::class, 'get_fdps']);
         // Route::post('add_fdps', [FichierDePreuveController::class, 'add_fdps']);
 
 
 
-        // Services 
+        // Services
         Route::get('get_services', [ServiceController::class, 'get_services']);
         Route::post('add_service', [ServiceController::class, 'add_service']);
 
@@ -173,8 +173,8 @@ Route::middleware('auth:sanctum')->group(
         Route::post('handle_edit', [NodeController::class, 'handle_edit']);
 
 
-        
-        Route::post('getDatasByIds', 
+
+        Route::post('getDatasByIds',
         function(Request $request)
             {
 
@@ -206,7 +206,7 @@ Route::middleware('auth:sanctum')->group(
                             case "App\Models\DossierSimple":
                                 $node->parent_type = 'ds';
                                 break;
-                            
+
                             default:
                                 $node->parent_type = '';
                                 break;
@@ -215,13 +215,11 @@ Route::middleware('auth:sanctum')->group(
                         return $node;
                     };
 
-                    switch ($request->type) 
+                    switch ($request->type)
                     {
                         case 'audit':
                             # code...
-                            $audit = Audit::find($request->id);
-                            $audit->services;
-                            $audit->user;
+                            $audit = AuditController::find($request->id);
                             return $audit;
                         case 'checkList':
                             # code...
@@ -257,7 +255,7 @@ Route::middleware('auth:sanctum')->group(
                             $f->services;
                             $f->url = "http://localhost/overview_of?id=".$f->id;;
                             return $format($f);
-                        
+
                         default:
                             # code...
                             break;
@@ -289,9 +287,9 @@ Route::middleware('auth:sanctum')->group(
 
 
 Route::get('user', function()
-    { 
-        $authUser = Auth::user(); 
-        if ($authUser) 
+    {
+        $authUser = Auth::user();
+        if ($authUser)
         {
             # code...
 
@@ -327,7 +325,7 @@ Route::get('user', function()
                         $node->front_type = 'f';
                         $node->node_type = 'Fichier';
                         break;
-                    
+
                     default:;
                         break;
                 }
@@ -335,7 +333,7 @@ Route::get('user', function()
                 return json_decode($node);
             };
 
-            
+
 
             $authUser->services;
             $authUser->operationNotifications;

@@ -51,6 +51,20 @@ class AuditController extends Controller
        return $audits;
     }
 
+    public static function find(int $id)
+    {
+        $audit = Audit::find($id);
+        $audit->services;
+        $audit->user;
+        $audit->checkList;
+        $audit->dossier_preuve;
+        $audit->nc;
+        $audit->dossiers;
+        $audit->fichiers;
+
+        return $audit;
+    }
+
     public function add_audit(Request $request)
     {
         DB::beginTransaction();
@@ -61,7 +75,7 @@ class AuditController extends Controller
 
         try {
             //code...
-            
+
             $request->validate([
                 'name' => ['required', 'string', 'max:255'],
                 'section_id' => ['required', 'integer'],
@@ -130,17 +144,17 @@ class AuditController extends Controller
 
 
                 if (Storage::makeDirectory("public\\".$pathCheckList->value) && Storage::makeDirectory("public\\".$pathDp->value) && Storage::makeDirectory("public\\".$pathNc->value)) {
-        
-        
+
+
                     $services = json_decode($request->services);
-                    
+
                     $this->add_to_services($services, $new_audit->id, 'App\Models\Audit');
                     $this->add_to_services($services, $new_checkList->id, 'App\Models\checkList');
                     $this->add_to_services($services, $new_dp->id, 'App\Models\DossierPreuve');
                     $this->add_to_services($services, $new_nonC->id, 'App\Models\Nc');
-                    
+
                     array_push($audit_family, $new_audit, $new_checkList, $new_dp, $new_nonC);
-        
+
                     // foreach($services as $service)
                     // {
                     //     Serviable::create(
@@ -172,9 +186,9 @@ class AuditController extends Controller
                     //         ]
                     //     );
                     // }
-        
+
                 }
-                else 
+                else
                 {
                     $saved = false;
                     $errorResponse = ["msg" => "storingError", "value" => "Error : Creating folder not work, return false"];
@@ -186,14 +200,14 @@ class AuditController extends Controller
                 $errorResponse = "existAlready";
             }
 
-            
-        } 
+
+        }
         catch (\Throwable $th) {
             //throw $th;
             $saved = false;
             $errorResponse = ["msg" => "catchException", "value" => $th];
         }
-        
+
         if($saved)
         {
             DB::commit(); // YES --> finalize it
@@ -208,16 +222,16 @@ class AuditController extends Controller
         }
 
         // DB::endTransaction();
-        
+
         $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
-        
-        return $saved ? $new_audit : $errorResponse ;
+
+        return $saved ? AuditController::find($new_audit->id) : $errorResponse ;
 
     }
 
     function del_audit(Request $request)
     {
-        
+
         DB::beginTransaction();
 
         $goesWell = true;
@@ -238,7 +252,7 @@ class AuditController extends Controller
 
                 $target->delete();
             }
-            else 
+            else
             {
                 try {
                     $new_operation = operationNotification::create(
@@ -250,12 +264,12 @@ class AuditController extends Controller
                             'validator_id' => Auth::user()->validator_id
                         ]
                     );
-                } 
+                }
                 catch (\Throwable $th) {
                     return \response('en attente', 500);
-                    
+
                 }
-                
+
                 $new_operation->operable;
                 $new_operation->front_type = 'audit';
                 Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Audit', $new_operation, Auth::user()));
@@ -267,23 +281,23 @@ class AuditController extends Controller
             //throw $th;
             $goesWell = false;
         }
-        
+
         if($goesWell)
         {
             Storage::deleteDirectory($pathInStorage);
-            DB::commit(); // YES --> finalize it 
+            DB::commit(); // YES --> finalize it
             NodeUpdateEvent::dispatch('audit', $cache, "delete");
-            
+
             return $target;
         }
         else
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
-            
+
             return \response($th, 500);
         }
 
     }
-    
+
 
 }
