@@ -135,7 +135,9 @@ class NodeController extends Controller
                         $job->etat = 'success';
                         $job->data = $audit_job->data->check_list;
 
-//                        return $audit_job->data->check_list;
+                        $jobs[$key] = json_encode($job);
+
+//                        return $job;
                     }
                     else
                     {
