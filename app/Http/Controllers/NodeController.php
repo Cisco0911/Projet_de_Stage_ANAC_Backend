@@ -223,14 +223,14 @@ class NodeController extends Controller
                             {
                                 if( !empty($job->dependencies) )
                                 {
-                                    $dependence = $this->find($jobs, $job->dependencies[0]);
+                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
 
-                                    if( $dependence->etat == 'success' )
+                                    if( $dependency_data->state == 'success' )
                                     {
                                         $res = $this->fncController->add_fncs(
                                             new Request(
                                                 [
-                                                    'nonC_id' => $dependence->data->id,
+                                                    'nonC_id' => $dependency_data->id,
                                                     'debut' => $job->data->debut,
                                                     'fin' => $job->data->fin,
                                                     'level' => $job->data->level,
