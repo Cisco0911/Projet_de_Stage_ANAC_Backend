@@ -46,7 +46,7 @@ class NonConformiteController extends Controller
         //     case "App\Models\DossierSimple":
         //         $node->parent_type = 'ds';
         //         break;
-            
+
         //     default:
         //         $node->parent_type = '';
         //         break;
@@ -96,7 +96,7 @@ class NonConformiteController extends Controller
             $start = $request->debut;
             $end = $request->fin;
 
-            for ($i= $start ; $i < $end + 1 ; $i++) { 
+            for ($i= $start ; $i < $end + 1 ; $i++) {
                 # code...
                 $new_fnc = NonConformite::create(
                                 [
@@ -104,7 +104,7 @@ class NonConformiteController extends Controller
                                     'level' => $request->level,
                                     'nc_id' => $request->nonC_id,
                                     'section_id' => $audit->section->id,
-                                    
+
                                 ]
                             );
 
@@ -120,12 +120,13 @@ class NonConformiteController extends Controller
                         ]
                     );
                     if (Storage::makeDirectory("public\\".$path_value)) {
-            
+
                         $services = json_decode($request->services);
 
                         $this->add_to_services($services, $new_fnc->id, 'App\Models\NonConformite');
 
-                        array_push($new_fncs, $new_fnc);
+//                        array_push($new_fncs, $new_fnc);
+                        $new_fncs["$i"] = $new_fnc;
                     }
                     else {
                         $saved = false;
@@ -140,21 +141,27 @@ class NonConformiteController extends Controller
                 }
             }
 
-            
-        } 
+
+        }
         catch (\Throwable $th) {
             //throw $th;
             $saved = false;
             $errorResponse = ["msg" => "catchException", "value" => $th];
         }
-        
+
         if($saved)
         {
-            DB::commit(); // YES --> finalize it 
+            DB::commit(); // YES --> finalize it
 
             $getId = function($element){ return $element->id.'-fnc'; };
 
-            NodeUpdateEvent::dispatch('fnc', array_map( $getId, $new_fncs ), 'add');
+            $fnc_list = [];
+            foreach ($new_fncs as $fnc)
+            {
+                array_push($fnc_list, $fnc);
+            }
+
+            NodeUpdateEvent::dispatch('fnc', array_map( $getId, $fnc_list ), 'add');
         }
         else
         {
@@ -165,24 +172,24 @@ class NonConformiteController extends Controller
 
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
         }
-        
-        
+
+
         $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
-        
-        return $saved ? end($new_fncs) : $errorResponse ;
-        
-        
+
+        return $saved ? $new_fncs : $errorResponse ;
+
+
     }
 
     function del_fnc(Request $request)
     {
-        
+
         DB::beginTransaction();
 
         $goesWell = true;
 
 
-        try 
+        try
         {
 
             $target = NonConformite::find($request->id);
@@ -198,7 +205,7 @@ class NonConformiteController extends Controller
 
                 $target->delete();
             }
-            else 
+            else
             {
                 try {
                     $new_operation = operationNotification::create(
@@ -210,12 +217,12 @@ class NonConformiteController extends Controller
                             'validator_id' => Auth::user()->validator_id
                         ]
                     );
-                } 
+                }
                 catch (\Throwable $th) {
                     return \response('en attente', 500);
-                    
+
                 }
-                
+
                 $new_operation->operable;
                 $new_operation->front_type = 'fnc';
                 Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Non-Conformite', $new_operation, Auth::user()));
@@ -223,25 +230,25 @@ class NonConformiteController extends Controller
                 return 'attente';
             }
 
-        } 
+        }
         catch (\Throwable $th) {
             //throw $th;
             $goesWell = false;
         }
-        
+
         if($goesWell)
         {
             Storage::deleteDirectory($pathInStorage);
-            DB::commit(); // YES --> finalize it 
-            
+            DB::commit(); // YES --> finalize it
+
             NodeUpdateEvent::dispatch('fnc', $cache, "delete");
-            
+
             return $target;
         }
         else
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
-            
+
             return \response($th, 500);
         }
 
@@ -249,47 +256,47 @@ class NonConformiteController extends Controller
 
     function update_fnc( Request $request )
     {
-        
+
         DB::beginTransaction();
 
         $goesWell = true;
 
 
-        try 
+        try
         {
-            
+
             $request->validate([
                 'id' => ['required', 'integer'],
                 'update_object' => ['required', 'string'],
                 'new_value' => ['required'],
             ]);
 
-            if ($request->update_object == 'level') 
+            if ($request->update_object == 'level')
             {
                 # code...
                 NonConformite::where('id', $request->id)->update(['level' => $request->new_value]);
             }
 
-        } 
+        }
         catch (\Throwable $th) {
             //throw $th;
             $goesWell = false;
         }
-        
+
         if($goesWell)
         {
-            DB::commit(); // YES --> finalize it 
+            DB::commit(); // YES --> finalize it
 
             // $getId = function($element){ return $element->id.'-fnc'; }; array_map( $getId, $request )
-            
+
             NodeUpdateEvent::dispatch('fnc', $request->id.'-fnc', "update");
-            
+
             return 'OK';
         }
         else
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
-            
+
             return \response($th, 500);
         }
 
