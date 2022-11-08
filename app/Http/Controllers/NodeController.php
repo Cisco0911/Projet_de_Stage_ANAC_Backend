@@ -250,28 +250,18 @@ class NodeController extends Controller
                                                 'debut' => $job->data->debut,
                                                 'fin' => $job->data->fin,
                                                 'level' => $job->data->level,
-                                                'services' => \json_encode($job->data->services)
+                                                'services' => \json_encode($job->data->services),
+                                                'exceptions' => json_encode($job->exceptions),
 
                                             ]
                                         )
                                     );
                                 }
 
-                                if( true )
-                                {
-                                    $job->etat = 'success';
-                                    $job->data = $res;
+                                $job->etat = $res["statue"];
+                                $job->data = $res["data"];
 
-                                    $jobs[$key] = json_encode($job);
-
-                                    // return $jobs;
-                                }
-                                else
-                                {
-                                    $job->etat = 'error';
-
-                                    $jobs[$key] = json_encode($job);
-                                }
+                                $jobs[$key] = json_encode($job);
 
                                 // return $res;
 
@@ -279,21 +269,79 @@ class NodeController extends Controller
                             }
                             case 'del':
                             {
-                                $res = $this->fncController->del_fnc(
-                                    new Request(
-                                        [
-                                            'id' => $job->node_id,
-                                        ]
-                                    )
-                                );
+                                if( !empty($job->dependencies) )
+                                {
+                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
 
-    //                                return $res;
+                                    if( $dependency_data->state == 'success' )
+                                    {
+                                        $res = $this->fncController->del_fnc(
+                                            new Request(
+                                                [
+                                                    'id' => $dependency_data->id,
+                                                ]
+                                            )
+                                        );
+                                    }
+                                }
+                                else
+                                {
+                                    $res = $this->fncController->del_fnc(
+                                        new Request(
+                                            [
+                                                'id' => $job->node_id,
+                                            ]
+                                        )
+                                    );
+                                }
+
+//                                    return $res;
 
                                 break;
                             }
                             case 'update':
-                                # code...
+                            {
+                                if( !empty($job->dependencies) )
+                                {
+                                    $fnc_data = $this->find($jobs, $job->dependencies[0]);
+
+                                    if( $fnc_data->state == 'success' )
+                                    {
+                                        $res = $this->fncController->update_fnc(
+                                            new Request(
+                                                [
+                                                    'id' => $fnc_data->id,
+                                                    'update_object' => $job->data->update_object,
+                                                    'new_value' => $job->data->new_value,
+
+                                                ]
+                                            )
+                                        );
+                                    }
+                                }
+                                else
+                                {
+                                    $res = $this->fncController->update_fnc(
+                                        new Request(
+                                            [
+                                                'id' => $job->data->id,
+                                                'update_object' => $job->data->update_object,
+                                                'new_value' => $job->data->new_value,
+
+                                            ]
+                                        )
+                                    );
+                                }
+
+                                $job->etat = $res["statue"];
+                                $job->data = $res["data"];
+
+                                $jobs[$key] = json_encode($job);
+
+                                // return $res;
+
                                 break;
+                            }
 
                             default:
                                 # code...

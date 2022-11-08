@@ -10,6 +10,7 @@ use App\Models\NonConformite;
 use App\Events\NodeUpdateEvent;
 use Illuminate\Support\Facades\DB;
 use App\Http\Traits\ServiableTrait;
+use App\Http\Traits\ResponseTrait;
 use Illuminate\Support\Facades\Auth;
 use App\Models\operationNotification;
 use Illuminate\Support\Facades\Storage;
@@ -20,6 +21,7 @@ class NonConformiteController extends Controller
 {
     //
     use ServiableTrait;
+    use ResponseTrait;
 
     function format($element)
     {
@@ -95,49 +97,63 @@ class NonConformiteController extends Controller
 
             $start = $request->debut;
             $end = $request->fin;
+            $exceptions = json_decode($request->exceptions);
 
-            for ($i= $start ; $i < $end + 1 ; $i++) {
+            $isException = function ($exceptions, $num)
+            {
+                foreach ($exceptions as $exception)
+                {
+                    if( intval($exceptions) == $num ) return true;
+                }
+                return false;
+            };
+
+            for ($i = $start ; $i < $end + 1 ; $i++)
+            {
                 # code...
-                $new_fnc = NonConformite::create(
-                                [
-                                    'name' => 'FNC-'.$audit->name."-$i",
-                                    'level' => $request->level,
-                                    'nc_id' => $request->nonC_id,
-                                    'section_id' => $audit->section->id,
-
-                                ]
-                            );
-
-                $path_value = $new_fnc->nc->path->value."\\".$new_fnc->name;
-
-                if (!Storage::exists('public\\'.$path_value)) {
-                    # code...
-                    $path = Paths::create(
+                if (!$isException($exceptions, $i))
+                {
+                    $new_fnc = NonConformite::create(
                         [
-                            'value' => $path_value,
-                            'routable_id' => $new_fnc->id,
-                            'routable_type' => 'App\Models\NonConformite'
+                            'name' => 'FNC-'.$audit->name."-$i",
+                            'level' => $request->level,
+                            'nc_id' => $request->nonC_id,
+                            'section_id' => $audit->section->id,
+
                         ]
                     );
-                    if (Storage::makeDirectory("public\\".$path_value)) {
 
-                        $services = json_decode($request->services);
+                    $path_value = $new_fnc->nc->path->value."\\".$new_fnc->name;
 
-                        $this->add_to_services($services, $new_fnc->id, 'App\Models\NonConformite');
+                    if (!Storage::exists('public\\'.$path_value)) {
+                        # code...
+                        $path = Paths::create(
+                            [
+                                'value' => $path_value,
+                                'routable_id' => $new_fnc->id,
+                                'routable_type' => 'App\Models\NonConformite'
+                            ]
+                        );
+                        if (Storage::makeDirectory("public\\".$path_value)) {
+
+                            $services = json_decode($request->services);
+
+                            $this->add_to_services($services, $new_fnc->id, 'App\Models\NonConformite');
 
 //                        array_push($new_fncs, $new_fnc);
-                        $new_fncs["$i"] = $new_fnc;
-                    }
-                    else {
-                        $saved = false;
-                        $errorResponse = ["msg" => "storingError", "value" => "Error : Creating folder not work, return false"];
-                    }
+                            $new_fncs["$i"] = $new_fnc;
+                        }
+                        else {
+                            $saved = false;
+                            $errorResponse = ["msg" => "storingError", "value" => "Error : Creating folder not work, return false"];
+                        }
 
-                }
-                else
-                {
-                    $saved = false;
-                    $errorResponse = "existAlready";
+                    }
+                    else
+                    {
+                        $saved = false;
+                        $errorResponse = "existAlready";
+                    }
                 }
             }
 
@@ -176,7 +192,7 @@ class NonConformiteController extends Controller
 
         $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
 
-        return $saved ? $new_fncs : $errorResponse ;
+        return $saved ? ResponseTrait::get('success', $new_fncs) : ResponseTrait::get('error', $errorResponse) ;
 
 
     }
@@ -243,13 +259,13 @@ class NonConformiteController extends Controller
 
             NodeUpdateEvent::dispatch('fnc', $cache, "delete");
 
-            return $target;
+            return ResponseTrait::get('success', $target);
         }
         else
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return \response($th, 500);
+            return \response(ResponseTrait::get('error', $th->getMessage()), 500);
         }
 
     }
@@ -291,13 +307,13 @@ class NonConformiteController extends Controller
 
             NodeUpdateEvent::dispatch('fnc', $request->id.'-fnc', "update");
 
-            return 'OK';
+            return ResponseTrait::get('success', null);
         }
         else
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return \response($th, 500);
+            return \response(ResponseTrait::get('error', $th), 500);
         }
 
     }
