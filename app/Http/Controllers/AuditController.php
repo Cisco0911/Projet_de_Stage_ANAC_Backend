@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Traits\ResponseTrait;
 use App\Models\Nc;
 use App\Models\User;
 use App\Models\Audit;
@@ -24,6 +25,7 @@ class AuditController extends Controller
 {
     //
     use ServiableTrait;
+    use ResponseTrait;
 
     function format($element)
     {
@@ -225,7 +227,7 @@ class AuditController extends Controller
 
         $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
 
-        return $saved ? AuditController::find($new_audit->id) : $errorResponse ;
+        return $saved ? ResponseTrait::get('success', AuditController::find($new_audit->id)) : ResponseTrait::get('error', $errorResponse) ;
 
     }
 
@@ -266,7 +268,7 @@ class AuditController extends Controller
                     );
                 }
                 catch (\Throwable $th) {
-                    return \response('en attente', 500);
+                    return \response(ResponseTrait::get('error', 'en attente'), 500);
 
                 }
 
@@ -274,7 +276,7 @@ class AuditController extends Controller
                 $new_operation->front_type = 'audit';
                 Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Audit', $new_operation, Auth::user()));
                 DB::commit();
-                return 'attente';
+                return ResponseTrait::get('success', 'attente');
             }
 
         } catch (\Throwable $th) {
@@ -288,13 +290,13 @@ class AuditController extends Controller
             DB::commit(); // YES --> finalize it
             NodeUpdateEvent::dispatch('audit', $cache, "delete");
 
-            return $target;
+            return ResponseTrait::get('success', $target);
         }
         else
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return \response($th, 500);
+            return \response(ResponseTrait::get('error', $th->getMessage()), 500);
         }
 
     }

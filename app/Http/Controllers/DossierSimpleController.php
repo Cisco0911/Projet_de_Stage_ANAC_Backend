@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Traits\ResponseTrait;
 use Exception;
 use App\Models\User;
 use App\Models\Paths;
@@ -23,6 +24,7 @@ class DossierSimpleController extends Controller
 {
     //
     use ServiableTrait;
+    use ResponseTrait;
 
     private function format($element)
     {
@@ -146,13 +148,18 @@ class DossierSimpleController extends Controller
         catch (\Throwable $th) {
             //throw $th;
             $saved = false;
-            $errorResponse = ["msg" => "catchException", "value" => $th];
+            $errorResponse = ["msg" => "catchException", "value" => $th->getMessage()];
         }
 
         if($saved)
         {
             DB::commit(); // YES --> finalize it
-            NodeUpdateEvent::dispatch('ds', [$new_folder->id.'-ds'], "add");
+            try
+            {
+                NodeUpdateEvent::dispatch('ds', [$new_folder->id.'-ds'], "add");
+            }
+            catch (\Throwable $e)
+            {}
         }
         else
         {
@@ -163,7 +170,7 @@ class DossierSimpleController extends Controller
 
         $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
 
-        return $saved ? $new_folder : $errorResponse ;
+        return $saved ? ResponseTrait::get('success', $new_folder) : ResponseTrait::get('error', $errorResponse) ;
 
     }
 
@@ -210,8 +217,9 @@ class DossierSimpleController extends Controller
                             'validator_id' => Auth::user()->validator_id
                         ]
                     );
-                } catch (\Throwable $th) {
-                    return \response('en attente', 500);
+                }
+                catch (\Throwable $th) {
+                    return \response(ResponseTrait::get('error', 'en attente'), 500);
 
                 }
 
@@ -219,12 +227,12 @@ class DossierSimpleController extends Controller
                 $new_operation->front_type = 'ds';
                 Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Dossier', $new_operation, Auth::user()));
                 DB::commit();
-                return 'attente';
+                return ResponseTrait::get('success', 'attente');
             }
             // RemovalEvent::dispatch('Dossier', $cache, Auth::user());
 
         }
-        catch (\Throwable $th)
+        catch (\Throwable $th2)
         {
             //throw $th;
             $goesWell = false;
@@ -236,13 +244,13 @@ class DossierSimpleController extends Controller
             DB::commit(); // YES --> finalize it
             NodeUpdateEvent::dispatch('ds', $cache, "delete");
 
-            return $target;
+            return ResponseTrait::get('success', $target);
         }
         else
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return \response($th, 500);
+            return \response(ResponseTrait::get('error', $th2->getMessage()), 500);
         }
 
     }

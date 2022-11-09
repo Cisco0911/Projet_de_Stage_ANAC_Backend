@@ -101,9 +101,10 @@ class NonConformiteController extends Controller
 
             $isException = function ($exceptions, $num)
             {
+                if ( empty($exceptions) ) return false;
                 foreach ($exceptions as $exception)
                 {
-                    if( intval($exceptions) == $num ) return true;
+                    if( intval($exception) == $num ) return true;
                 }
                 return false;
             };
@@ -235,7 +236,7 @@ class NonConformiteController extends Controller
                     );
                 }
                 catch (\Throwable $th) {
-                    return \response('en attente', 500);
+                    return \response(ResponseTrait::get('error', 'en attente'), 500);
 
                 }
 
@@ -243,7 +244,7 @@ class NonConformiteController extends Controller
                 $new_operation->front_type = 'fnc';
                 Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Non-Conformite', $new_operation, Auth::user()));
                 DB::commit();
-                return 'attente';
+                return ResponseTrait::get('success', 'attente');
             }
 
         }

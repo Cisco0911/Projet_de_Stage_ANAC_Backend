@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Traits\ResponseTrait;
 use App\Models\User;
 use App\Models\Paths;
 use App\Models\Fichier;
@@ -21,6 +22,7 @@ class FichierController extends Controller
 {
     //
     use ServiableTrait;
+    use ResponseTrait;
 
     function format($element)
     {
@@ -250,7 +252,7 @@ class FichierController extends Controller
 
         $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
 
-        return $saved ? $good : $errorResponse ;
+        return $saved ? ResponseTrait::get('success', $good) : ResponseTrait::get('error', $errorResponse) ;
 
     }
 
@@ -292,7 +294,7 @@ class FichierController extends Controller
                         ]
                     );
                 } catch (\Throwable $th) {
-                    return \response('en attente', 500);
+                    return \response(ResponseTrait::get('error', 'en attente'), 500);
 
                 }
 
@@ -314,13 +316,13 @@ class FichierController extends Controller
             DB::commit(); // YES --> finalize it
             NodeUpdateEvent::dispatch('f', $cache, 'delete');
 
-            return $target;
+            return ResponseTrait::get('success', $target);
         }
         else
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return \response($th, 500);
+            return \response(ResponseTrait::get('error', $th->getMessage()), 500);
         }
 
     }

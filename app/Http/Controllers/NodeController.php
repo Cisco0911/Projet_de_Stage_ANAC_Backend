@@ -109,21 +109,10 @@ class NodeController extends Controller
                                 );
 
 
-                                if( $res->id )
-                                {
-                                    $job->etat = 'success';
-                                    $job->data = $res;
+                                $job->etat = $res["statue"];
+                                $job->data = $res["data"];
 
-                                    $jobs[$key] = json_encode($job);
-
-    //                                 return $jobs;
-                                }
-                                else
-                                {
-                                    $job->etat = 'error';
-
-                                    $jobs[$key] = json_encode($job);
-                                }
+                                $jobs[$key] = json_encode($job);
 
     //                            return $res;
 
@@ -160,19 +149,10 @@ class NodeController extends Controller
                     {
                         $audit_job_data = $this->find($jobs, $job->dependencies[0]);
 
-                        if( $audit_job_data->state == 'success' )
-                        {
-                            $job->etat = 'success';
-                            $job->data = $audit_job_data->check_list;
+                        $job->etat = $res["statue"];
+                        $job->data = $res["data"];
 
-                            $jobs[$key] = json_encode($job);
-
-    //                        return $job;
-                        }
-                        else
-                        {
-
-                        }
+                        $jobs[$key] = json_encode($job);
 
                         break;
                     }
@@ -181,17 +161,10 @@ class NodeController extends Controller
                     {
                         $audit_job_data = $this->find($jobs, $job->dependencies[0]);
 
-                        if( $audit_job_data->state == 'success' )
-                        {
-                            $job->etat = 'success';
-                            $job->data = $audit_job_data->dossier_preuve;
+                        $job->etat = $res["statue"];
+                        $job->data = $res["data"];
 
-                            $jobs[$key] = json_encode($job);
-                        }
-                        else
-                        {
-
-                        }
+                        $jobs[$key] = json_encode($job);
 
                         break;
                     }
@@ -200,17 +173,10 @@ class NodeController extends Controller
                     {
                         $audit_job_data = $this->find($jobs, $job->dependencies[0]);
 
-                        if( $audit_job_data->state == 'success' )
-                        {
-                            $job->etat = 'success';
-                            $job->data = $audit_job_data->nc;
+                        $job->etat = $res["statue"];
+                        $job->data = $res["data"];
 
-                            $jobs[$key] = json_encode($job);
-                        }
-                        else
-                        {
-
-                        }
+                        $jobs[$key] = json_encode($job);
 
                         break;
                     }
@@ -234,7 +200,8 @@ class NodeController extends Controller
                                                     'debut' => $job->data->debut,
                                                     'fin' => $job->data->fin,
                                                     'level' => $job->data->level,
-                                                    'services' => \json_encode($job->data->services)
+                                                    'services' => \json_encode($job->data->services),
+                                                    'exceptions' => json_encode($job->exceptions),
 
                                                 ]
                                             )
@@ -394,21 +361,10 @@ class NodeController extends Controller
                                     );
                                 }
 
-                                if( $res->id )
-                                {
-                                    $job->etat = 'success';
-                                    $job->data = $res;
+                                $job->etat = $res["statue"];
+                                $job->data = $res["data"];
 
-                                    $jobs[$key] = json_encode($job);
-
-                                    // return $jobs;
-                                }
-                                else
-                                {
-                                    $job->etat = 'error';
-
-                                    $jobs[$key] = json_encode($job);
-                                }
+                                $jobs[$key] = json_encode($job);
 
                                 // return $res;
 
@@ -483,21 +439,10 @@ class NodeController extends Controller
                                     );
                                 }
 
-//                                if( $res->id )
-//                                {
-//                                    $job->etat = 'success';
-//                                    $job->data = $res;
-//
-//                                    $jobs[$key] = json_encode($job);
-//
-//                                    // return $jobs;
-//                                }
-//                                else
-//                                {
-//                                    $job->etat = 'error';
-//
-//                                    $jobs[$key] = json_encode($job);
-//                                }
+                                $job->etat = $res["statue"];
+                                $job->data = $res["data"];
+
+                                $jobs[$key] = json_encode($job);
 
 //                                 return $res;
 
