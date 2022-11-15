@@ -24,6 +24,19 @@ class FichierController extends Controller
     use ServiableTrait;
     use ResponseTrait;
 
+    public static function find(int $id)
+    {
+        $file = Fichier::find($id);
+        $file->section;
+        $file->services;
+        $file->path;
+        $file->parent;
+        $file->operation;
+        $file->url = "http://localhost/overview_of?id=".$file->id;;
+
+        return $file;
+    }
+
     function format($element)
     {
         $element->services;

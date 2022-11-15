@@ -24,4 +24,17 @@ class DossierPreuveController extends Controller
 
        return $dps;
     }
+
+    public static function find(int $id)
+    {
+        $dp = DossierPreuve::find($id);
+        $dp->section;
+        $dp->services;
+        $dp->path;
+        $dp->audit;
+        $dp->dossiers;
+        $dp->fichiers;
+
+        return $dp;
+    }
 }

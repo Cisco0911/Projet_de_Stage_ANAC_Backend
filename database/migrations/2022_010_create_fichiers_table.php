@@ -13,11 +13,14 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('ncs', function (Blueprint $table) {
+        Schema::create('fichiers', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->foreignId('audit_id')->constrained();
-            $table->foreignId('service_id')->constrained();
+            $table->string('extension');
+            $table->string('path');
+            $table->bigInteger('size');
+            $table->integer('parent_id');
+            $table->string('parent_type');
             $table->foreignId('section_id')->constrained();
             $table->timestamps();
         });
@@ -30,6 +33,6 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('ncs');
+        Schema::dropIfExists('fichiers');
     }
 };

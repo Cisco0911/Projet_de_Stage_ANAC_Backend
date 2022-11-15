@@ -23,6 +23,20 @@ class NonConformiteController extends Controller
     use ServiableTrait;
     use ResponseTrait;
 
+    public static function find(int $id)
+    {
+        $fnc = NonConformite::find($id);
+        $fnc->section;
+        $fnc->services;
+        $fnc->path;
+        $fnc->nc;
+        $fnc->dossiers;
+        $fnc->fichiers;
+        $fnc->operation;
+
+        return $fnc;
+    }
+
     function format($element)
     {
         $element->services;
@@ -92,6 +106,8 @@ class NonConformiteController extends Controller
                 'fin' => ['required', 'integer'],
                 'level' => ['required', 'integer'],
             ]);
+
+//            return $request->nonC_id;
 
             $audit = Nc::find($request->nonC_id)->audit;
 
@@ -163,7 +179,7 @@ class NonConformiteController extends Controller
         catch (\Throwable $th) {
             //throw $th;
             $saved = false;
-            $errorResponse = ["msg" => "catchException", "value" => $th];
+            $errorResponse = ["msg" => "catchException", "value" => $th->getMessage()];
         }
 
         if($saved)

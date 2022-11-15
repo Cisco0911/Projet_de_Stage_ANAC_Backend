@@ -13,11 +13,10 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('dossier_preuves', function (Blueprint $table) {
+        Schema::create('ncs', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
+            $table->string('name')->default('NC');
             $table->foreignId('audit_id')->constrained();
-            $table->foreignId('service_id')->constrained();
             $table->foreignId('section_id')->constrained();
             $table->timestamps();
         });
@@ -30,6 +29,6 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('dossier_preuves');
+        Schema::dropIfExists('ncs');
     }
 };

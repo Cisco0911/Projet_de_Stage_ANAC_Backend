@@ -24,4 +24,17 @@ class CheckListController extends Controller
 
        return $checkLists;
     }
+
+    public static function find(int $id)
+    {
+        $checkList = checkList::find($id);
+        $checkList->section;
+        $checkList->services;
+        $checkList->path;
+        $checkList->audit;
+        $checkList->dossiers;
+        $checkList->fichiers;
+
+        return $checkList;
+    }
 }

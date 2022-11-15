@@ -74,6 +74,20 @@ class DossierSimpleController extends Controller
        return $ds;
     }
 
+    public static function find(int $id)
+    {
+        $folder = DossierSimple::find($id);
+        $folder->section;
+        $folder->services;
+        $folder->path;
+        $folder->parent;
+        $folder->dossiers;
+        $folder->fichiers;
+        $folder->operation;
+
+        return $folder;
+    }
+
 
     public function add_folder(Request $request)
     {
@@ -102,6 +116,8 @@ class DossierSimpleController extends Controller
                     'parent_type' => $request->parent_type,
                 ]
             );
+
+//            return $new_folder->parent;
 
             $path_value = $new_folder->parent->path->value."\\".$new_folder->name;
 

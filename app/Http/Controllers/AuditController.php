@@ -57,10 +57,13 @@ class AuditController extends Controller
     {
         $audit = Audit::find($id);
         $audit->services;
+        $audit->section;
+        $audit->operation;
         $audit->user;
         $audit->checkList;
         $audit->dossier_preuve;
         $audit->nc;
+        $audit->path;
         $audit->dossiers;
         $audit->fichiers;
 
@@ -87,119 +90,84 @@ class AuditController extends Controller
 
             $new_audit = null;
 
+            $new_audit = Audit::create(
+                [
+                    'name' => $request->name,
+                    'section_id' => $request->section_id,
+                    'user_id' => $request->ra_id,
+                ]
+            );
 
-            if (!Storage::exists('public\\Audit\\'.$request->name)) {
-                # code...
-
-                $new_audit = Audit::create(
-                    [
-                        'name' => $request->name,
-                        'section_id' => $request->section_id,
-                        'user_id' => $request->ra_id,
-                    ]
-                );
-
-                $new_checkList = checkList::create( ['audit_id'=> $new_audit->id, 'section_id' => $request->section_id] );
-                $new_checkList->name = 'checkList';
-                $new_checkList->sub_type = 'checkList';
-
-                $new_dp = DossierPreuve::create( ['audit_id'=> $new_audit->id, 'section_id' => $request->section_id] );
-                $new_dp->name = 'Dossier Preuve';
-                $new_dp->sub_type = 'dp';
-
-                $new_nonC = Nc::create( ['audit_id'=> $new_audit->id, 'section_id' => $request->section_id] );
-                $new_nonC->name = 'NC';
-                $new_nonC->sub_type = 'nonC';
+            $audit_path = $new_audit->section->path->value.'\\'.$new_audit->name;
 
 
-                $pathAudit = Paths::create(
-                    [
-                        'value' => 'Audit\\'.$new_audit->name,
-                        'routable_id' => $new_audit->id,
-                        'routable_type' => 'App\Models\Audit'
-                    ]
-                );
 
-                $pathCheckList = Paths::create(
-                    [
-                        'value' => 'Audit\\'.$new_audit->name.'\\CheckList',
-                        'routable_id' => $new_checkList->id,
-                        'routable_type' => 'App\Models\checkList'
-                    ]
-                );
+            $new_checkList = checkList::create( ['audit_id'=> $new_audit->id, 'section_id' => $request->section_id] );
+            $new_checkList->name = 'checkList';
+            $new_checkList->sub_type = 'checkList';
 
-                $pathDp = Paths::create(
-                    [
-                        'value' => 'Audit\\'.$new_audit->name.'\\Dossier Preuve',
-                        'routable_id' => $new_dp->id,
-                        'routable_type' => 'App\Models\DossierPreuve'
-                    ]
-                );
+            $new_dp = DossierPreuve::create( ['audit_id'=> $new_audit->id, 'section_id' => $request->section_id] );
+            $new_dp->name = 'Dossier Preuve';
+            $new_dp->sub_type = 'dp';
 
-                $pathNc = Paths::create(
-                    [
-                        'value' => 'Audit\\'.$new_audit->name.'\\NC',
-                        'routable_id' => $new_nonC->id,
-                        'routable_type' => 'App\Models\Nc'
-                    ]
-                );
+            $new_nonC = Nc::create( ['audit_id'=> $new_audit->id, 'section_id' => $request->section_id] );
+            $new_nonC->name = 'NC';
+            $new_nonC->sub_type = 'nonC';
 
 
-                if (Storage::makeDirectory("public\\".$pathCheckList->value) && Storage::makeDirectory("public\\".$pathDp->value) && Storage::makeDirectory("public\\".$pathNc->value)) {
+            $pathAudit = Paths::create(
+                [
+                    'value' => $audit_path,
+                    'routable_id' => $new_audit->id,
+                    'routable_type' => 'App\Models\Audit'
+                ]
+            );
+
+            $pathCheckList = Paths::create(
+                [
+                    'value' => $pathAudit->value.'\\CheckList',
+                    'routable_id' => $new_checkList->id,
+                    'routable_type' => 'App\Models\checkList'
+                ]
+            );
+
+            $pathDp = Paths::create(
+                [
+                    'value' => $pathAudit->value.'\\Dossier Preuve',
+                    'routable_id' => $new_dp->id,
+                    'routable_type' => 'App\Models\DossierPreuve'
+                ]
+            );
+
+            $pathNc = Paths::create(
+                [
+                    'value' => $pathAudit->value.'\\NC',
+                    'routable_id' => $new_nonC->id,
+                    'routable_type' => 'App\Models\Nc'
+                ]
+            );
+
+//            return $pathCheckList->value;
+
+            if (Storage::makeDirectory("public\\".$pathCheckList->value) && Storage::makeDirectory("public\\".$pathDp->value) && Storage::makeDirectory("public\\".$pathNc->value)) {
 
 
-                    $services = json_decode($request->services);
+                $services = json_decode($request->services);
 
-                    $this->add_to_services($services, $new_audit->id, 'App\Models\Audit');
-                    $this->add_to_services($services, $new_checkList->id, 'App\Models\checkList');
-                    $this->add_to_services($services, $new_dp->id, 'App\Models\DossierPreuve');
-                    $this->add_to_services($services, $new_nonC->id, 'App\Models\Nc');
+                $this->add_to_services($services, $new_audit->id, 'App\Models\Audit');
+                $this->add_to_services($services, $new_checkList->id, 'App\Models\checkList');
+                $this->add_to_services($services, $new_dp->id, 'App\Models\DossierPreuve');
+                $this->add_to_services($services, $new_nonC->id, 'App\Models\Nc');
 
-                    array_push($audit_family, $new_audit, $new_checkList, $new_dp, $new_nonC);
+                array_push($audit_family, $new_audit, $new_checkList, $new_dp, $new_nonC);
 
-                    // foreach($services as $service)
-                    // {
-                    //     Serviable::create(
-                    //         [
-                    //             'service_id' => $service->value,
-                    //             'serviable_id' => $new_audit->id,
-                    //             'serviable_type' => 'App\Models\Audit',
-                    //         ]
-                    //     );
-                    //     Serviable::create(
-                    //         [
-                    //             'service_id' => $service->value,
-                    //             'serviable_id' => $new_checkList->id,
-                    //             'serviable_type' => 'App\Models\checkList',
-                    //         ]
-                    //     );
-                    //     Serviable::create(
-                    //         [
-                    //             'service_id' => $service->value,
-                    //             'serviable_id' => $new_dp->id,
-                    //             'serviable_type' => 'App\Models\DossierPreuve',
-                    //         ]
-                    //     );
-                    //     Serviable::create(
-                    //         [
-                    //             'service_id' => $service->value,
-                    //             'serviable_id' => $new_nonC->id,
-                    //             'serviable_type' => 'App\Models\Nc',
-                    //         ]
-                    //     );
-                    // }
 
-                }
-                else
-                {
-                    $saved = false;
-                    $errorResponse = ["msg" => "storingError", "value" => "Error : Creating folder not work, return false"];
-                }
+
             }
             else
             {
                 $saved = false;
-                $errorResponse = "existAlready";
+                $errorResponse = ["msg" => "storingError", "value" => "Error : Creating folder not work, return false"];
             }
 
 

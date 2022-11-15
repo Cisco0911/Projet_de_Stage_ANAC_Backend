@@ -24,4 +24,17 @@ class NcController extends Controller
 
        return $nonCs;
     }
+
+    public static function find(int $id)
+    {
+        $nonC = Nc::find($id);
+        $nonC->section;
+        $nonC->services;
+        $nonC->path;
+        $nonC->audit;
+        $nonC->dossiers;
+        $nonC->fichiers;
+
+        return $nonC;
+    }
 }

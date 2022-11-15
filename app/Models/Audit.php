@@ -43,17 +43,17 @@ class Audit extends Model
     {
         return $this->belongsTo(Section::class);
     }
-    
+
     public function nc()
     {
         return $this->hasOne(Nc::class);
     }
-    
+
     public function checklist()
     {
         return $this->hasOne(checkList::class);
     }
-    
+
     public function dossier_preuve()
     {
         return $this->hasOne(DossierPreuve::class);
@@ -84,7 +84,7 @@ class Audit extends Model
         parent::boot();
 
         static::deleting(function($audit) { // before delete() method call this
-            
+
             foreach ($audit->dossiers as $key => $child_folder) $child_folder->delete();
             foreach ($audit->fichiers as $key => $child_file) $child_file->delete();
 

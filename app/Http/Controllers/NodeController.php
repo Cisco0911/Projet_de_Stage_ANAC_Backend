@@ -150,7 +150,7 @@ class NodeController extends Controller
                         $audit_job_data = $this->find($jobs, $job->dependencies[0]);
 
                         $job->etat = $res["statue"];
-                        $job->data = $res["data"];
+                        $job->data = $res["data"]->checkList;
 
                         $jobs[$key] = json_encode($job);
 
@@ -162,7 +162,7 @@ class NodeController extends Controller
                         $audit_job_data = $this->find($jobs, $job->dependencies[0]);
 
                         $job->etat = $res["statue"];
-                        $job->data = $res["data"];
+                        $job->data = $res["data"]->dossier_preuve;
 
                         $jobs[$key] = json_encode($job);
 
@@ -174,7 +174,7 @@ class NodeController extends Controller
                         $audit_job_data = $this->find($jobs, $job->dependencies[0]);
 
                         $job->etat = $res["statue"];
-                        $job->data = $res["data"];
+                        $job->data = $res["data"]->nc;
 
                         $jobs[$key] = json_encode($job);
 
@@ -206,6 +206,8 @@ class NodeController extends Controller
                                                 ]
                                             )
                                         );
+
+//                                        return $res;
                                     }
                                 }
                                 else
@@ -366,7 +368,7 @@ class NodeController extends Controller
 
                                 $jobs[$key] = json_encode($job);
 
-                                // return $res;
+//                                 return $res;
 
                                 break;
                             }

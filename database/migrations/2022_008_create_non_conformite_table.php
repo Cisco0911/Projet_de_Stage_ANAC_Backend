@@ -13,11 +13,12 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('dossier_preuves', function (Blueprint $table) {
+        Schema::create('non_conformites', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->foreignId('audit_id')->constrained();
-            $table->foreignId('service_id')->constrained();
+            $table->string('name')->unique();
+            $table->tinyInteger('level', false, true);
+            $table->boolean('isClosed')->default(false);
+            $table->foreignId('nc_id')->constrained();
             $table->foreignId('section_id')->constrained();
             $table->timestamps();
         });
@@ -30,6 +31,6 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('dossier_preuves');
+        Schema::dropIfExists('non_conformites');
     }
 };

@@ -1,15 +1,7 @@
 <?php
 
-use App\Models\Nc;
-use App\Models\User;
-use App\Models\Audit;
-use App\Models\Fichier;
-use App\Models\checkList;
 use Illuminate\Http\Request;
 
-use App\Models\DossierPreuve;
-use App\Models\DossierSimple;
-use App\Models\NonConformite;
 use Laravel\Fortify\Features;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -223,37 +215,30 @@ Route::middleware('auth:sanctum')->group(
                             return $audit;
                         case 'checkList':
                             # code...
-                            $checkList = checkList::find($request->id);
-                            $checkList->services;
+                            $checkList = CheckListController::find($request->id);
                             $checkList->sub_type = 'checkList';
                             return $checkList;
                         case 'dp':
                             # code...
-                            $dp = DossierPreuve::find($request->id);
-                            $dp->services;
+                            $dp = DossierPreuveController::find($request->id);
                             $dp->sub_type = 'dp';
                             return $dp;
                         case 'nonC':
                             # code...
-                            $nonC = Nc::find($request->id);
-                            $nonC->services;
+                            $nonC = NcController::find($request->id);
                             $nonC->sub_type = 'nonC';
                             return $nonC;
                         case 'fnc':
                             # code...
-                            $fnc = NonConformite::find($request->id);
-                            $fnc->services;
+                            $fnc = NonConformiteController::find($request->id);
                             return $fnc;
                         case 'ds':
                             # code...
-                            $ds = DossierSimple::find($request->id);
-                            $ds->services;
+                            $ds = DossierSimpleController::find($request->id);
                             return $format($ds);
                         case 'f':
                             # code...
-                            $f = Fichier::find($request->id);
-                            $f->services;
-                            $f->url = "http://localhost/overview_of?id=".$f->id;;
+                            $f = FichierController::find($request->id);
                             return $format($f);
 
                         default:

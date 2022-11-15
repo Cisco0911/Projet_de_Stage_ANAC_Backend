@@ -13,13 +13,11 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('fichier_de_preuves', function (Blueprint $table) {
+        Schema::create('audits', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->string('extension');
-            $table->string('path');
-            $table->integer('parent_id');
-            $table->string('parent_type');
+            $table->string('name')->unique();
+            $table->foreignId('user_id')->constrained();
+            $table->foreignId('section_id')->constrained();
             $table->timestamps();
         });
     }
@@ -31,6 +29,6 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('fichier_de_preuves');
+        Schema::dropIfExists('audits');
     }
 };
