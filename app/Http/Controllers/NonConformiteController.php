@@ -8,6 +8,7 @@ use App\Models\Paths;
 use Illuminate\Http\Request;
 use App\Models\NonConformite;
 use App\Events\NodeUpdateEvent;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use App\Http\Traits\ServiableTrait;
 use App\Http\Traits\ResponseTrait;
@@ -108,6 +109,7 @@ class NonConformiteController extends Controller
             ]);
 
 //            return $request->nonC_id;
+//            $date = new Date();
 
             $audit = Nc::find($request->nonC_id)->audit;
 
@@ -304,10 +306,16 @@ class NonConformiteController extends Controller
                 'new_value' => ['required'],
             ]);
 
-            if ($request->update_object == 'level')
+            switch ($request->update_object)
             {
-                # code...
-                NonConformite::where('id', $request->id)->update(['level' => $request->new_value]);
+                case 'level':
+                    NonConformite::where('id', $request->id)->update(['level' => $request->new_value]);
+                    break;
+                case 'review_date':
+                    NonConformite::where('id', $request->id)->update(['review_date' => $request->new_value]);
+                    break;
+                default:
+                    return ResponseTrait::get('success', 'Nothing was done');
             }
 
         }

@@ -1,5 +1,7 @@
 <?php
 
+use App\Notifications\FncReviewNotification;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 use Laravel\Fortify\Features;
@@ -38,6 +40,7 @@ use Laravel\Fortify\Http\Controllers\TwoFactorAuthenticationController;
 use Laravel\Fortify\Http\Controllers\EmailVerificationNotificationController;
 use Laravel\Fortify\Http\Controllers\TwoFactorAuthenticatedSessionController;
 use Laravel\Fortify\Http\Controllers\ConfirmedTwoFactorAuthenticationController;
+use Thomasjohnkane\Snooze\ScheduledNotification;
 
 /*
 |--------------------------------------------------------------------------
@@ -156,14 +159,27 @@ Route::middleware('auth:sanctum')->group(
 
 
 
-        //Notification
+        // Notification
         Route::post('notify_response', [OperationNotificationController::class, 'notify_response']);
 
 
 
-        //Editor
+        // Editor
         Route::post('handle_edit', [NodeController::class, 'handle_edit']);
 
+
+
+        // Schedule Notification
+        Route::post('schedule_review',
+            function (Request $request)
+            {
+                ScheduledNotification::create(
+                    Auth::user(), // Target
+                    new FncReviewNotification($request->id), // Notification
+                    Carbon::now()->addRealSeconds(10) // Send At
+                );
+            }
+        );
 
 
         Route::post('getDatasByIds',

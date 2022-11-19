@@ -17,6 +17,7 @@ return new class extends Migration
             $table->id();
             $table->string('name')->unique();
             $table->tinyInteger('level', false, true);
+            $table->date('review_date')->nullable();
             $table->boolean('isClosed')->default(false);
             $table->foreignId('nc_id')->constrained();
             $table->foreignId('section_id')->constrained();

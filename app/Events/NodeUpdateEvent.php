@@ -15,6 +15,8 @@ class NodeUpdateEvent implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+//    public $afterCommit = true;
+
 
     public $node_type;
     public $node;

@@ -102,15 +102,16 @@ class AuditController extends Controller
 
 
 
-            $new_checkList = checkList::create( ['audit_id'=> $new_audit->id, 'section_id' => $request->section_id] );
+//            $new_checkList = checkList::create( ['audit_id'=> $new_audit->id, 'section_id' => $request->section_id] );
+            $new_checkList = $new_audit->checklist()->create( [ 'section_id' => $request->section_id ] );
             $new_checkList->name = 'checkList';
             $new_checkList->sub_type = 'checkList';
 
-            $new_dp = DossierPreuve::create( ['audit_id'=> $new_audit->id, 'section_id' => $request->section_id] );
+            $new_dp = $new_audit->dossier_preuve()->create( [ 'section_id' => $request->section_id ] );
             $new_dp->name = 'Dossier Preuve';
             $new_dp->sub_type = 'dp';
 
-            $new_nonC = Nc::create( ['audit_id'=> $new_audit->id, 'section_id' => $request->section_id] );
+            $new_nonC = $new_audit->nc()->create( [ 'section_id' => $request->section_id ] );
             $new_nonC->name = 'NC';
             $new_nonC->sub_type = 'nonC';
 

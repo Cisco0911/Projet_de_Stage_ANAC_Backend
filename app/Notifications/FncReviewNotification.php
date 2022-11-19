@@ -3,13 +3,14 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Notification;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\BroadcastMessage;
+use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification;
 
-class RemovalNotification extends Notification
+class FncReviewNotification extends Notification
 {
+//    use Queueable;
 
     /**
      * Create a new notification instance.
@@ -18,18 +19,12 @@ class RemovalNotification extends Notification
      */
 
 
-    public $node_type;
-    public $node;
-    public $user;
+    public $fncId;
 
 
-    public function __construct($node_type, $node, $user)
+    public function __construct($fncId)
     {
-        //
-        // $this->afterCommit();
-        $this->node_type = $node_type;
-        $this->node = $node;
-        $this->user = $user;
+        $this->fncId = $fncId;
     }
 
     /**
@@ -50,29 +45,26 @@ class RemovalNotification extends Notification
      * @return BroadcastMessage
      */
 
-
     public function toBroadcast($notifiable)
     {
         return new BroadcastMessage([
-            'node_type' => $this->node_type,
-            'node' => $this->node,
-            'user' => $this->user,
+            'fncId' => $this->fncId,
         ]);
     }
 
     public function broadcastType()
     {
-        return 'NodeRemovalNotification';
+        return 'FncReviewNotification';
     }
 
-    // public function toMail($notifiable)
-    // {
-    //     return (new MailMessage)
-    //                 ->line('The introduction to the notification.')
-    //                 ->action('Notification Action', url('/'))
-    //                 ->line('Thank you for using our application!');
-    // }
 
+//    public function toMail($notifiable)
+//    {
+//        return (new MailMessage)
+//                    ->line('The introduction to the notification.')
+//                    ->action('Notification Action', url('/'))
+//                    ->line('Thank you for using our application!');
+//    }
 
     /**
      * Get the array representation of the notification.
