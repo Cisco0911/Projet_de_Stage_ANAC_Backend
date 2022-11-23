@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Nc;
 use App\Models\User;
 use App\Models\Paths;
+use App\Notifications\FncReviewNotification;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Models\NonConformite;
 use App\Events\NodeUpdateEvent;
@@ -17,6 +19,7 @@ use App\Models\operationNotification;
 use Illuminate\Support\Facades\Storage;
 use App\Notifications\RemovalNotification;
 use Illuminate\Support\Facades\Notification;
+use Thomasjohnkane\Snooze\ScheduledNotification;
 
 class NonConformiteController extends Controller
 {
@@ -312,8 +315,64 @@ class NonConformiteController extends Controller
                     NonConformite::where('id', $request->id)->update(['level' => $request->new_value]);
                     break;
                 case 'review_date':
+                {
+                    function existing_reminder($fncId, $new_remain_time): bool
+                    {
+                        $review_reminders = ScheduledNotification::findByType('App\Notifications\FncReviewNotification');
+
+                        $res = false;
+
+                        foreach ($review_reminders as $review_reminder)
+                        {
+                            if ((int)$review_reminder->getNotification()->getFncId() == (int)$fncId)
+                            {
+                                if ($review_reminder->getNotification()->isAnticipated())
+                                {
+                                    $review_reminder->reschedule(
+                                        Carbon::now()->addRealMilliseconds((int)$new_remain_time)->subRealMinute()
+                                    );
+                                    continue;
+                                }
+                                $review_reminder->reschedule(
+                                    Carbon::now()->addRealMilliseconds((int)$new_remain_time)
+                                );
+
+                                $res = true;
+                            }
+                        }
+
+                        return $res;
+                    }
+
+
+                    $remain_ms = json_decode($request->additional_info)->remain_ms;
+                    $fnc = NonConformite::find($request->id);
                     NonConformite::where('id', $request->id)->update(['review_date' => $request->new_value]);
+
+                    if ( !existing_reminder($request->id, $remain_ms) )
+                    {
+                        $inspectors = $fnc->nc->audit->users;
+
+                        foreach ( $inspectors as $inspector )
+                        {
+                            ScheduledNotification::create(
+                                $inspector, // Target
+                                new FncReviewNotification($request->id), // Notification
+                                Carbon::now()->addRealMilliseconds((int)$remain_ms) // Send At
+                            );
+
+                            ScheduledNotification::create(
+                                $inspector, // Target
+                                new FncReviewNotification($request->id, true), // Notification
+                                Carbon::now()->addRealMilliseconds((int)$remain_ms)->subRealMinute() // Send At
+                            );
+
+                        }
+                    }
+//                    return "nooooooooothing";
+
                     break;
+                }
                 default:
                     return ResponseTrait::get('success', 'Nothing was done');
             }
@@ -338,7 +397,7 @@ class NonConformiteController extends Controller
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return \response(ResponseTrait::get('error', $th), 500);
+            return \response(ResponseTrait::get('error', $th->getMessage()), 500);
         }
 
     }

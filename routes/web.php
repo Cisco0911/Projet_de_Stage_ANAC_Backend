@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\UserController;
 use App\Notifications\FncReviewNotification;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -141,9 +142,8 @@ Route::middleware('auth:sanctum')->group(
 
 
 
-        // conformité
-        // Route::get('get_cs', [ConformiteController::class, 'get_cs']);
-        // Route::post('add_c', [ConformiteController::class, 'add_c']);
+        // user
+         Route::get('get_users', [UserController::class, 'get_users']);
 
 
 
@@ -161,6 +161,7 @@ Route::middleware('auth:sanctum')->group(
 
         // Notification
         Route::post('notify_response', [OperationNotificationController::class, 'notify_response']);
+        Route::post('markAsRead', [UserController::class, 'markAsRead']);
 
 
 
@@ -344,6 +345,8 @@ Route::get('user', function()
                 $authUser->operationNotifications[$key]->from;
                 $authUser->operationNotifications[$key] = $format($authUser->operationNotifications[$key]);
             }
+            $authUser->unreadNotifications;
+            $authUser->readNotifications;
         }
 
         return $authUser;

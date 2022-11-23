@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Http\Controllers\NonConformiteController;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\BroadcastMessage;
@@ -19,12 +20,40 @@ class FncReviewNotification extends Notification
      */
 
 
-    public $fncId;
+    private $fncId;
+    private $anticipated;
+    private $object;
+    private $msg;
 
 
-    public function __construct($fncId)
+
+    public function __construct($fncId, $anticipated = false)
     {
         $this->fncId = $fncId;
+        $this->anticipated = $anticipated;
+        $this->object = "Rappel de Revision";
+
+        $fnc = NonConformiteController::find($this->fncId);
+
+        $this->msg = $this->anticipated ?
+            "Il reste 15 jours pour la revision de la ".$fnc->name :
+            "Revision de la ".$fnc->name." aujourd'hui"
+        ;
+    }
+
+    public function getFncId()
+    {
+        return $this->fncId;
+    }
+
+    public function isAnticipated()
+    {
+        return $this->anticipated;
+    }
+
+    public function getMsg()
+    {
+        return $this->msg;
     }
 
     /**
@@ -35,7 +64,7 @@ class FncReviewNotification extends Notification
      */
     public function via($notifiable)
     {
-        return ['broadcast'];
+        return ['broadcast', 'database'];
     }
 
     /**
@@ -49,12 +78,28 @@ class FncReviewNotification extends Notification
     {
         return new BroadcastMessage([
             'fncId' => $this->fncId,
+            'msg' => $this->object."\n".$this->msg
         ]);
     }
 
     public function broadcastType()
     {
         return 'FncReviewNotification';
+    }
+
+    /**
+     * Get the array representation of the notification.
+     *
+     * @param  mixed  $notifiable
+     * @return array
+     */
+    public function toDatabase($notifiable)
+    {
+        return [
+            'fncId' => $this->fncId,
+            'object' => $this->object,
+            'msg' => $this->msg,
+        ];
     }
 
 
@@ -72,12 +117,12 @@ class FncReviewNotification extends Notification
      * @param  mixed  $notifiable
      * @return array
      */
-    public function toArray($notifiable)
-    {
-        return [
-            //
-        ];
-    }
+//    public function toArray($notifiable)
+//    {
+//        return [
+//            //
+//        ];
+//    }
 
     public function withDelay($notifiable)
     {

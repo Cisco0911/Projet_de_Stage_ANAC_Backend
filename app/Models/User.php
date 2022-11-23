@@ -56,27 +56,32 @@ class User extends Authenticatable
 
 
 
-    public function audits()
+    public function audits(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Audit::class);
     }
 
-    public function fncs()
+    public function audits_belonging_to(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Audit::class);
+    }
+
+    public function fncs(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
     {
         return $this->hasManyThrough(NonConformite::class, Audit::class);
     }
 
-    public function services()
+    public function services(): \Illuminate\Database\Eloquent\Relations\MorphToMany
     {
         return $this->morphToMany(Service::class, 'serviable');
     }
 
-    public function operationNotifications()
+    public function operationNotifications(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(operationNotification::class, 'validator_id');
     }
 
-    public function operationInQueue()
+    public function operationInQueue(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(operationNotification::class, 'from_id');
     }

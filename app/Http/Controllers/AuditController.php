@@ -27,6 +27,24 @@ class AuditController extends Controller
     use ServiableTrait;
     use ResponseTrait;
 
+    public static function find(int $id)
+    {
+        $audit = Audit::find($id);
+        $audit->services;
+        $audit->section;
+        $audit->operation;
+        $audit->user;
+        $audit->users;
+        $audit->checkList;
+        $audit->dossier_preuve;
+        $audit->nc;
+        $audit->path;
+        $audit->dossiers;
+        $audit->fichiers;
+
+        return $audit;
+    }
+
     function format($element)
     {
         $element->services;
@@ -51,23 +69,6 @@ class AuditController extends Controller
        }
 
        return $audits;
-    }
-
-    public static function find(int $id)
-    {
-        $audit = Audit::find($id);
-        $audit->services;
-        $audit->section;
-        $audit->operation;
-        $audit->user;
-        $audit->checkList;
-        $audit->dossier_preuve;
-        $audit->nc;
-        $audit->path;
-        $audit->dossiers;
-        $audit->fichiers;
-
-        return $audit;
     }
 
     public function add_audit(Request $request)

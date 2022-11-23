@@ -282,6 +282,7 @@ class NodeController extends Controller
                                                     'id' => $fnc_data->id,
                                                     'update_object' => $job->data->update_object,
                                                     'new_value' => $job->data->new_value,
+                                                    'additional_info' => $job->data->additional_info,
 
                                                 ]
                                             )
@@ -296,11 +297,14 @@ class NodeController extends Controller
                                                 'id' => $job->data->id,
                                                 'update_object' => $job->data->update_object,
                                                 'new_value' => $job->data->new_value,
+                                                'additional_info' => $job->data->additional_info
 
                                             ]
                                         )
                                     );
                                 }
+
+//                                return $res;
 
                                 $job->etat = $res["statue"];
                                 $job->data = $res["data"];

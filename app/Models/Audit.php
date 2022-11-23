@@ -34,6 +34,11 @@ class Audit extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function users()
+    {
+        return $this->belongsToMany(User::class);
+    }
+
     public function services()
     {
         return $this->morphToMany(Service::class, 'serviable');

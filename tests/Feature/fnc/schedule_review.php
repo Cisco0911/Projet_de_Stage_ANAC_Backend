@@ -23,12 +23,15 @@ class schedule_review extends TestCase
         $response = $this
             ->actingAs($user)
             ->withSession(['banned' => false])
-            ->postJson('schedule_review',
+            ->postJson('update_fnc',
             [
-                'id' => 6
+                'id' => 66,
+                'update_object' => 'review_date',
+                'new_value' => '2023/01/17 9:16'
             ]
         );
 
+        $response->dump();
         $response->assertStatus(200);
     }
 

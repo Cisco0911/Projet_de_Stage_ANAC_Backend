@@ -20,3 +20,7 @@ Broadcast::channel('validating.{validator_id}', function ($user, $validator_id) 
 Broadcast::channel('user.{validator_id}', function ($user, $validator_id) {
     return (int) $user->id === (int) $validator_id;
 });
+
+Broadcast::channel('user.{id}', function ($user, $id) {
+    return (int) $user->id === (int) $id;
+});
