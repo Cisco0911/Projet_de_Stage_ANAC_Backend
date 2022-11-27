@@ -16,6 +16,7 @@ use App\Http\Traits\ServiableTrait;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use App\Models\operationNotification;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use App\Notifications\RemovalNotification;
 use Illuminate\Support\Facades\Notification;
@@ -176,17 +177,19 @@ class DossierSimpleController extends Controller
             }
             catch (\Throwable $e)
             {}
+
+            return ResponseTrait::get('success', $new_folder);
         }
         else
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
+
+            $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
+
+            return ResponseTrait::get('error', $errorResponse) ;
         }
 
         // DB::endTransaction();
-
-        $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
-
-        return $saved ? ResponseTrait::get('success', $new_folder) : ResponseTrait::get('error', $errorResponse) ;
 
     }
 
@@ -267,6 +270,90 @@ class DossierSimpleController extends Controller
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
             return \response(ResponseTrait::get('error', $th2->getMessage()), 500);
+        }
+
+    }
+
+    public function move_folder(Request $request)
+    {
+
+        DB::beginTransaction();
+
+        $goes_well = true;
+
+        function update_path($folder)
+        {
+            $parent = $folder->parent;
+
+            $folder->path->value = $parent->path->value."\\".$folder->name;
+
+            $folder->push();
+            $folder->refresh();
+
+            foreach ($folder->dossiers as $sub_folder)
+            {
+                update_path($sub_folder);
+            }
+
+            return $folder->path->value;
+
+        }
+
+        try
+        {
+            $request->validate([
+                'destination_id' => ['required', 'integer'],
+                'destination_type' => ['required', 'string', 'max:255'],
+                'id' => ['required', 'integer'],
+            ]);
+
+            $old_folder = DossierSimple::find($request->id);
+            $from = json_decode( json_encode( storage_path().'\app\public\\'.$old_folder->path->value ) );
+
+//            DossierSimple::where('id', $request->id)->update(
+//                [
+//                    'parent_id' => $request->destination_id,
+//                    'parent_type' => $request->destination_type
+//                ]
+//            );
+
+            $old_folder->parent_id = $request->destination_id;
+            $old_folder->parent_type = $request->destination_type;
+
+            $old_folder->push();
+
+            $new_folder = $old_folder->refresh();
+
+            $to = json_decode( json_encode( storage_path().'\app\public\\'.update_path($new_folder) ) );
+
+            $goes_well = File::moveDirectory(
+                $from,
+                $to
+            );
+        }
+        catch (\Throwable $th)
+        {
+            return ResponseTrait::get('error', $th->getMessage());
+        }
+
+
+
+        if($goes_well)
+        {
+            DB::commit(); // YES --> finalize it
+            try
+            {
+                NodeUpdateEvent::dispatch('ds', [$new_folder->id.'-ds'], "update");
+            }
+            catch (\Throwable $e)
+            {}
+            return ResponseTrait::get('success', $new_folder);
+        }
+        else
+        {
+            DB::rollBack(); // NO --> some error has occurred undo the whole thing
+
+            return ResponseTrait::get('error', $goes_well);
         }
 
     }
