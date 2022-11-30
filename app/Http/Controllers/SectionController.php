@@ -9,6 +9,19 @@ class SectionController extends Controller
 {
     //
 
+    public static function find(int $id)
+    {
+        $section = Section::find($id);
+        $section->services;
+        $section->path;
+        $section->audit;
+        $section->dossiers;
+        $section->fichiers;
+
+
+        return $section;
+    }
+
 
     public function get_ss()
     {
@@ -23,4 +36,5 @@ class SectionController extends Controller
 
        return $ss;
     }
+
 }

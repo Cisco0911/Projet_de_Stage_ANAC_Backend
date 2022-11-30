@@ -130,6 +130,7 @@ Route::middleware('auth:sanctum')->group(
         Route::get('overview_of', [FichierController::class, 'overview_of']);
         Route::post('add_files', [FichierController::class, 'add_files']);
         Route::delete('del_file', [FichierController::class, 'del_file']);
+        Route::post('move_file', [FichierController::class, 'move_file']);
 
 
 
@@ -138,7 +139,8 @@ Route::middleware('auth:sanctum')->group(
         Route::get('get_ds', [DossierSimpleController::class, 'get_ds']);
         Route::post('add_folder', [DossierSimpleController::class, 'add_folder']);
         Route::delete('del_folder', [DossierSimpleController::class, 'del_folder']);
-        Route::post('move_folder', [DossierSimpleController::class, 'move_folder']);
+        Route::post('move_folder', [DossierSimpleController::class, 'move_folder']);        Route::post('move_folder', [DossierSimpleController::class, 'move_folder']);
+        Route::post('copy_folder', [DossierSimpleController::class, 'copy_folder']);
         Route::get('test', [DossierSimpleController::class, 'test']);
 
 

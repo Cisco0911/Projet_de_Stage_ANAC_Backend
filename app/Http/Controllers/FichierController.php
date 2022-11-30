@@ -7,11 +7,9 @@ use App\Models\User;
 use App\Models\Paths;
 use App\Models\Fichier;
 use Illuminate\Http\Request;
-use App\Models\DossierSimple;
 use App\Events\NodeUpdateEvent;
 use Illuminate\Support\Facades\DB;
 use App\Http\Traits\ServiableTrait;
-use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use App\Models\operationNotification;
 use Illuminate\Support\Facades\Storage;
@@ -336,6 +334,85 @@ class FichierController extends Controller
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
             return \response(ResponseTrait::get('error', $th->getMessage()), 500);
+        }
+
+    }
+
+    function update_path($file)
+    {
+        $parent = $file->parent;
+
+        $file->path->value = $parent->path->value."\\".$file->name;
+
+        $file->push();
+        $file->refresh();
+
+        return $file->path->value;
+
+    }
+
+    public function move_file(Request $request)
+    {
+
+        DB::beginTransaction();
+
+        $goes_well = true;
+
+        try
+        {
+            $request->validate([
+                'destination_id' => ['required', 'integer'],
+                'destination_type' => ['required', 'string', 'max:255'],
+                'id' => ['required', 'integer'],
+            ]);
+
+            $old_file = Fichier::find($request->id);
+            $from = json_decode( json_encode( 'public\\'.$old_file->path->value ) );
+
+//            DossierSimple::where('id', $request->id)->update(
+//                [
+//                    'parent_id' => $request->destination_id,
+//                    'parent_type' => $request->destination_type
+//                ]
+//            );
+
+            $old_file->parent_id = $request->destination_id;
+            $old_file->parent_type = $request->destination_type;
+
+            $old_file->push();
+
+            $new_file = $old_file->refresh();
+
+            $to = json_decode( json_encode('public\\'.$this->update_path($new_file) ) );
+
+            $goes_well = Storage::move(
+                $from,
+                $to
+            );
+        }
+        catch (\Throwable $th)
+        {
+            return ResponseTrait::get('error', $th->getMessage());
+        }
+
+
+
+        if($goes_well)
+        {
+            DB::commit(); // YES --> finalize it
+            try
+            {
+                NodeUpdateEvent::dispatch('f', [$new_file->id.'-f'], "update");
+            }
+            catch (\Throwable $e)
+            {}
+            return ResponseTrait::get('success', $new_file);
+        }
+        else
+        {
+            DB::rollBack(); // NO --> some error has occurred undo the whole thing
+
+            return ResponseTrait::get('error', $goes_well);
         }
 
     }
