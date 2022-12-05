@@ -18,7 +18,7 @@ class NodeUpdateEvent implements ShouldBroadcast
 //    public $afterCommit = true;
 
 
-    public $node_type;
+//    public $node_type;
     public $node;
     public $operation;
 
@@ -31,7 +31,7 @@ class NodeUpdateEvent implements ShouldBroadcast
     {
         //
 
-        $this->node_type = $node_type;
+//        $this->node_type = $node_type;
         $this->node = $node;
         $this->operation = $operation;
 

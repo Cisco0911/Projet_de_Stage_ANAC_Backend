@@ -279,7 +279,10 @@ class NonConformiteController extends Controller
             Storage::deleteDirectory($pathInStorage);
             DB::commit(); // YES --> finalize it
 
-            NodeUpdateEvent::dispatch('fnc', $cache, "delete");
+            $info = json_decode('{}');
+            $info->id = $cache->id; $info->type = 'fnc';
+
+            NodeUpdateEvent::dispatch('fnc', $info, "delete");
 
             return ResponseTrait::get('success', $target);
         }
@@ -389,7 +392,7 @@ class NonConformiteController extends Controller
 
             // $getId = function($element){ return $element->id.'-fnc'; }; array_map( $getId, $request )
 
-            NodeUpdateEvent::dispatch('fnc', $request->id.'-fnc', "update");
+            NodeUpdateEvent::dispatch('fnc', [$request->id.'-fnc'], "update");
 
             return ResponseTrait::get('success', null);
         }

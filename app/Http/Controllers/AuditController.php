@@ -258,7 +258,11 @@ class AuditController extends Controller
         {
             Storage::deleteDirectory($pathInStorage);
             DB::commit(); // YES --> finalize it
-            NodeUpdateEvent::dispatch('audit', $cache, "delete");
+
+            $info = json_decode('{}');
+            $info->id = $cache->id; $info->type = 'audit';
+
+            NodeUpdateEvent::dispatch('audit', $info, "delete");
 
             return ResponseTrait::get('success', $target);
         }

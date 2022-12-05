@@ -325,7 +325,11 @@ class FichierController extends Controller
         {
             Storage::delete($pathInStorage);
             DB::commit(); // YES --> finalize it
-            NodeUpdateEvent::dispatch('f', $cache, 'delete');
+
+            $info = json_decode('{}');
+            $info->id = $cache->id; $info->type = 'f';
+
+            NodeUpdateEvent::dispatch('f', $info, 'delete');
 
             return ResponseTrait::get('success', $target);
         }

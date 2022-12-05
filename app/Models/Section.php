@@ -14,7 +14,7 @@ class Section extends Model
 
 
 
-    
+
 
     public function services()
     {
@@ -26,12 +26,22 @@ class Section extends Model
         return $this->morphOne(Paths::class, 'routable');
     }
 
+    public function fichiers()
+    {
+        return $this->morphMany(Fichier::class, 'parent');
+    }
+
+    public function dossiers()
+    {
+        return $this->morphMany(DossierSimple::class, 'parent');
+    }
+
 
     public static function boot() {
         parent::boot();
 
         static::deleting(function($folder) { // before delete() method call this
-            
+
             foreach ($folder->dossiers as $key => $child_folder) $child_folder->delete();
             foreach ($folder->fichiers as $key => $child_file) $child_file->delete();
 

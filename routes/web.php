@@ -232,33 +232,37 @@ Route::middleware('auth:sanctum')->group(
                         case 'audit':
                             # code...
                             $audit = AuditController::find($request->id);
+                            $audit->front_type = 'audit';
                             return $audit;
                         case 'checkList':
                             # code...
                             $checkList = CheckListController::find($request->id);
-                            $checkList->sub_type = 'checkList';
+                            $checkList->front_type = 'checkList';
                             return $checkList;
                         case 'dp':
                             # code...
                             $dp = DossierPreuveController::find($request->id);
-                            $dp->sub_type = 'dp';
+                            $dp->front_type = 'dp';
                             return $dp;
                         case 'nonC':
                             # code...
                             $nonC = NcController::find($request->id);
-                            $nonC->sub_type = 'nonC';
+                            $nonC->front_type = 'nonC';
                             return $nonC;
                         case 'fnc':
                             # code...
                             $fnc = NonConformiteController::find($request->id);
+                            $fnc->front_type = 'fnc';
                             return $fnc;
                         case 'ds':
                             # code...
                             $ds = DossierSimpleController::find($request->id);
+                            $ds->front_type = 'ds';
                             return $format($ds);
                         case 'f':
                             # code...
                             $f = FichierController::find($request->id);
+                            $f->front_type = 'f';
                             return $format($f);
 
                         default:
@@ -274,7 +278,8 @@ Route::middleware('auth:sanctum')->group(
                     # code...
                     $id_arr = explode('-', $value);
 
-                    $new_request = json_decode('{"id":'.(int)$id_arr[0].', "type":"'.$id_arr[1].'"}');
+                    $new_request = json_decode('{}');
+                    $new_request->id = $id_arr[0]; $new_request->type = $id_arr[1];
 
                     // $new_request->id = (int)$id_arr[0];
                     // $new_request->type = $id_arr[1];
@@ -291,7 +296,7 @@ Route::middleware('auth:sanctum')->group(
 );
 
 
-Route::get('user', function()
+    Route::get('user', function()
     {
         $authUser = Auth::user();
         if ($authUser)
