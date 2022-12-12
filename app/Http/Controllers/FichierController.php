@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Traits\NodeTrait;
 use App\Http\Traits\ResponseTrait;
 use App\Models\User;
 use App\Models\Paths;
@@ -21,6 +22,7 @@ class FichierController extends Controller
     //
     use ServiableTrait;
     use ResponseTrait;
+    use NodeTrait;
 
     public static function find(int $id)
     {
@@ -316,7 +318,8 @@ class FichierController extends Controller
                 return 'attente';
             }
 
-        } catch (\Throwable $th) {
+        }
+        catch (\Throwable $th) {
             //throw $th;
             $goesWell = false;
         }
@@ -373,6 +376,8 @@ class FichierController extends Controller
             $old_file = Fichier::find($request->id);
             $from = json_decode( json_encode( 'public\\'.$old_file->path->value ) );
 
+            $destination = $this->find_node($request->destination_id, $request->destination_type);
+
 //            DossierSimple::where('id', $request->id)->update(
 //                [
 //                    'parent_id' => $request->destination_id,
@@ -380,19 +385,116 @@ class FichierController extends Controller
 //                ]
 //            );
 
-            $old_file->parent_id = $request->destination_id;
-            $old_file->parent_type = $request->destination_type;
+            if ( Paths::where([ 'value' => $destination->path->value.'\\'.$old_file->name ])->exists() )
+            {
+                switch ((int)$request->on_exist)
+                {
+                    case 1:
+                    {
+                        $new_file = Fichier::where(
+                            [
+                                'name' => $old_file->name,
+                                'parent_id' => (int)$request->destination_id,
+                                'parent_type' => $request->destination_type,
+                            ]
+                        )->first();
 
-            $old_file->push();
+                        if($new_file->exists()) $goes_well = true;
 
-            $new_file = $old_file->refresh();
+                        break;
+                    }
+                    case 2:
+                    {
+                        $num_copy = 1;
+                        $new_name = $old_file->name;
 
-            $to = json_decode( json_encode('public\\'.$this->update_path($new_file) ) );
+                        while (Paths::where([ 'value' => $destination->path->value.'\\'.$new_name ])->exists()) {
+                            # code...
 
-            $goes_well = Storage::move(
-                $from,
-                $to
-            );
+                            $set_num = $num_copy == 1 ? "" : " ($num_copy)";
+
+                            $new_name = $old_file->name." - Copie$set_num";
+
+                            $num_copy++;
+                        }
+
+                        $old_file->name = $new_name;
+
+                        $old_file->parent_id = $request->destination_id;
+                        $old_file->parent_type = $request->destination_type;
+
+                        $old_file->push();
+
+                        $new_file = $old_file->refresh();
+
+                        $to = json_decode( json_encode('public\\'.$this->update_path($new_file) ) );
+
+                        $goes_well = Storage::move(
+                            $from,
+                            $to
+                        );
+
+                        $new_file->refresh();
+
+                        break;
+                    }
+                    case 3:
+                    {
+                        $path = Paths::where([ 'value' => $destination->path->value.'\\'.$old_file->name ])->first();
+
+                        $existant_file = $path->routable;
+
+                        $this->del_file(
+                            new Request(
+                                [
+                                    'id' => $existant_file->id,
+                                ]
+                            )
+                        );
+
+                        $old_file->parent_id = $request->destination_id;
+                        $old_file->parent_type = $request->destination_type;
+
+                        $old_file->push();
+
+                        $new_file = $old_file->refresh();
+
+                        $to = json_decode( json_encode('public\\'.$this->update_path($new_file) ) );
+
+                        $goes_well = Storage::move(
+                            $from,
+                            $to
+                        );
+
+                        $new_file->refresh();
+
+                        break;
+                    }
+                }
+
+            }
+            else
+            {
+                $old_file->parent_id = $request->destination_id;
+                $old_file->parent_type = $request->destination_type;
+
+                $old_file->push();
+
+                $new_file = $old_file->refresh();
+
+                $to = json_decode( json_encode('public\\'.$this->update_path($new_file) ) );
+
+                $goes_well = Storage::move(
+                    $from,
+                    $to
+                );
+            }
+
+            $new_file->services()->detach();
+            foreach ($destination->services as $service)
+            {
+                $new_file->services()->attach($service->id);
+            }
         }
         catch (\Throwable $th)
         {
@@ -407,6 +509,216 @@ class FichierController extends Controller
             try
             {
                 NodeUpdateEvent::dispatch('f', [$new_file->id.'-f'], "update");
+            }
+            catch (\Throwable $e)
+            {}
+            return ResponseTrait::get('success', $new_file);
+        }
+        else
+        {
+            DB::rollBack(); // NO --> some error has occurred undo the whole thing
+
+            return ResponseTrait::get('error', $goes_well);
+        }
+
+    }
+
+    public function copy_file(Request $request)
+    {
+
+        DB::beginTransaction();
+
+        $goes_well = true;
+
+        try
+        {
+            $request->validate([
+                'destination_id' => ['required', 'integer'],
+                'destination_type' => ['required', 'string', 'max:255'],
+                'id' => ['required', 'integer'],
+            ]);
+
+            $old_file = Fichier::find($request->id);
+            $from = json_decode( json_encode( 'public\\'.$old_file->path->value ) );
+
+            $destination = $this->find_node($request->destination_id, $request->destination_type);
+
+//            DossierSimple::where('id', $request->id)->update(
+//                [
+//                    'parent_id' => $request->destination_id,
+//                    'parent_type' => $request->destination_type
+//                ]
+//            );
+
+            if ( Paths::where([ 'value' => $destination->path->value.'\\'.$old_file->name ])->exists() )
+            {
+                switch ((int)$request->on_exist)
+                {
+                    case 1:
+                    {
+                        $new_file = Fichier::where(
+                            [
+                                'name' => $old_file->name,
+                                'parent_id' => (int)$request->destination_id,
+                                'parent_type' => $request->destination_type,
+                            ]
+                        )->first();
+
+                        if($new_file->exists()) $goes_well = true;
+
+                        break;
+                    }
+                    case 2:
+                    {
+                        $num_copy = 1;
+                        $new_name = $old_file->name;
+
+                        while (Paths::where([ 'value' => $destination->path->value.'\\'.$new_name ])->exists()) {
+                            # code...
+
+                            $set_num = $num_copy == 1 ? "" : " ($num_copy)";
+
+                            $new_name = $old_file->name." - Copie$set_num";
+
+                            $num_copy++;
+                        }
+
+                        $new_file = new Fichier(
+                            [
+                                'name' => $new_name,
+                                'size' => $old_file->size,
+                                'extension' => $old_file->extension,
+                                'section_id' => $destination->section_id ?? $destination->id,
+                            ]
+                        );
+
+                        $destination->fichiers()->save($new_file);
+                        $destination->refresh();
+
+                        $new_file->path()->create(
+                            [
+                                'value' => $new_file->parent->path->value.'\\'.$new_file->name
+                            ]
+                        );
+                        foreach ($destination->services as $service)
+                        {
+                            $new_file->services()->attach($service->id);
+                        }
+
+                        $new_file = $new_file->refresh();
+
+                        $to = json_decode( json_encode('public\\'.$new_file->path->value ) );
+
+                        $goes_well = Storage::copy(
+                            $from,
+                            $to
+                        );
+
+                        $new_file->refresh();
+
+                        break;
+                    }
+                    case 3:
+                    {
+                        $path = Paths::where([ 'value' => $destination->path->value.'\\'.$old_file->name ])->first();
+
+                        $existant_file = $path->routable;
+
+                        $this->del_file(
+                            new Request(
+                                [
+                                    'id' => $existant_file->id,
+                                ]
+                            )
+                        );
+
+                        $new_file = new Fichier(
+                            [
+                                'name' => $old_file->name,
+                                'size' => $old_file->size,
+                                'extension' => $old_file->extension,
+                                'section_id' => $destination->section_id ?? $destination->id,
+                            ]
+                        );
+
+                        $destination->fichiers()->save($new_file);
+                        $destination->refresh();
+
+                        $new_file->path()->create(
+                            [
+                                'value' => $new_file->parent->path->value.'\\'.$new_file->name
+                            ]
+                        );
+                        foreach ($destination->services as $service)
+                        {
+                            $new_file->services()->attach($service->id);
+                        }
+
+                        $new_file = $new_file->refresh();
+
+                        $to = json_decode( json_encode('public\\'.$new_file->path->value ) );
+
+                        $goes_well = Storage::copy(
+                            $from,
+                            $to
+                        );
+
+                        $new_file->refresh();
+
+                        break;
+                    }
+                }
+
+            }
+            else
+            {
+                $new_file = new Fichier(
+                    [
+                        'name' => $old_file->name,
+                        'size' => $old_file->size,
+                        'extension' => $old_file->extension,
+                        'section_id' => $destination->section_id ?? $destination->id,
+                    ]
+                );
+
+                $destination->fichiers()->save($new_file);
+                $destination->refresh();
+
+                $new_file->path()->create(
+                    [
+                        'value' => $new_file->parent->path->value.'\\'.$new_file->name
+                    ]
+                );
+                foreach ($destination->services as $service)
+                {
+                    $new_file->services()->attach($service->id);
+                }
+
+                $new_file = $new_file->refresh();
+
+                $to = json_decode( json_encode('public\\'.$new_file->path->value ) );
+
+                $goes_well = Storage::copy(
+                    $from,
+                    $to
+                );
+
+                $new_file->refresh();
+            }
+        }
+        catch (\Throwable $th)
+        {
+            return ResponseTrait::get('error', $th->getMessage());
+        }
+
+
+
+        if($goes_well)
+        {
+            DB::commit(); // YES --> finalize it
+            try
+            {
+                NodeUpdateEvent::dispatch('f', [$new_file->id.'-f'], "add");
             }
             catch (\Throwable $e)
             {}

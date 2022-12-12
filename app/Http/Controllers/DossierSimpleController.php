@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Traits\NodeTrait;
 use App\Http\Traits\ResponseTrait;
 use App\Models\Fichier;
 use Exception;
@@ -26,6 +27,7 @@ class DossierSimpleController extends Controller
     //
     use ServiableTrait;
     use ResponseTrait;
+    use NodeTrait;
 
     private function format($element)
     {
@@ -278,29 +280,26 @@ class DossierSimpleController extends Controller
 
     }
 
-    public function find_destination($id, $type)
+    public function update_services($parent, $child)
     {
-
-        switch ($type) {
-            case "App\Models\Section":
-                return SectionController::find((int)$id);
-            case "App\Models\Audit":
-                return AuditController::find((int)$id);
-            case "App\Models\checkList":
-                return CheckListController::find((int)$id);
-            case "App\Models\DossierPreuve":
-                return DossierPreuveController::find((int)$id);
-            case "App\Models\Nc":
-                return NcController::find((int)$id);
-            case "App\Models\NonConformite":
-                return NonConformiteController::find((int)$id);
-            case "App\Models\DossierSimple":
-                return DossierSimpleController::find((int)$id);
-
-            default:
-                return 'nothing';
+        $child->services()->detach();
+        foreach ($parent->services as $service)
+        {
+            $child->services()->attach($service->id);
         }
 
+        if ( !($child instanceof Fichier) )
+        {
+            foreach ($child->dossiers as $dossier)
+            {
+                $this->update_services($child, $dossier);
+            }
+
+            foreach ($child->fichiers as $fichier)
+            {
+                $this->update_services($child, $fichier);
+            }
+        }
     }
 
     public function move_folder(Request $request)
@@ -413,7 +412,7 @@ class DossierSimpleController extends Controller
             $old_folder = DossierSimple::find($request->id);
             $from = json_decode( json_encode( storage_path().'\app\public\\'.$old_folder->path->value ) );
 
-            $destination = $this->find_destination($request->destination_id, $request->destination_type);
+            $destination = $this->find_node($request->destination_id, $request->destination_type);
 
 //            DossierSimple::where('id', $request->id)->update(
 //                [
@@ -464,7 +463,8 @@ class DossierSimpleController extends Controller
 
                         $goes_well = File::moveDirectory(
                             $from,
-                            $to
+                            $to,
+                            true
                         );
 
                         $new_folder->refresh();
@@ -535,17 +535,20 @@ class DossierSimpleController extends Controller
 
                 $goes_well = File::moveDirectory(
                     $from,
-                    $to
+                    $to,
+                    true
                 );
 
                 $new_folder->refresh();
                 array_push($GLOBALS['to_broadcast'], $new_folder);
             }
+
+            $this->update_services($destination, $new_folder);
         }
         catch (\Throwable $th)
         {
             $GLOBALS['to_broadcast'] = [];
-            return ResponseTrait::get('error', $th->getMessage());
+            return ResponseTrait::get('error', 'Line: '.$th->getLine().'; '.$th->getMessage());
         }
 
 
@@ -585,7 +588,7 @@ class DossierSimpleController extends Controller
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
             $GLOBALS['to_broadcast'] = [];
-            return ResponseTrait::get('error', $goes_well);
+            return ResponseTrait::get('error', [$goes_well, $from, $to]);
         }
 
     }
@@ -607,6 +610,12 @@ class DossierSimpleController extends Controller
                 if ( Paths::where( [ 'value' => $new_folder->path->value.'\\'.$dossier->name ] )->exists() )
                 {
                     $nv_dossier = Paths::where( [ 'value' => $new_folder->path->value.'\\'.$dossier->name ] )->first()->routable;
+
+                    $nv_dossier->services()->detach();
+                    foreach ($new_folder->services as $service)
+                    {
+                        $nv_dossier->services()->attach($service->id);
+                    }
                 }
                 else
                 {
@@ -664,6 +673,16 @@ class DossierSimpleController extends Controller
 //                $new_file->path;
                     array_push($GLOBALS['to_broadcast'], $new_file);
                 }
+                else
+                {
+                    $new_file = Paths::where( [ 'value' => $new_folder->path->value.'\\'.$fichier->name ] )->first()->routable;
+
+                    $new_file->services()->detach();
+                    foreach ($new_folder->services as $service)
+                    {
+                        $new_file->services()->attach($service->id);
+                    }
+                }
             }
         }
 
@@ -680,7 +699,7 @@ class DossierSimpleController extends Controller
             $old_folder = DossierSimple::find($request->id);
             $from = json_decode( json_encode( storage_path().'\app\public\\'.$old_folder->path->value ) );
 
-            $destination = $this->find_destination($request->destination_id, $request->destination_type);
+            $destination = $this->find_node($request->destination_id, $request->destination_type);
 
             if (Paths::where([ 'value' => $destination->path->value.'\\'.$old_folder->name ])->exists())
             {
