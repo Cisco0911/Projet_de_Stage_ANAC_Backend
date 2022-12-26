@@ -28,10 +28,10 @@ class UserController extends Controller
     {
         $users = User::all();
 
-        foreach ($users as $key => $users) {
+        foreach ($users as $key => $user) {
             # code...
 
-            $users->services;
+            $user->services;
 
         }
 

@@ -98,7 +98,6 @@ class DossierSimpleController extends Controller
         DB::beginTransaction();
 
         $saved = true;
-        $errorResponse = null;
 
         try {
             //code...
@@ -124,7 +123,7 @@ class DossierSimpleController extends Controller
 
             $path_value = $new_folder->parent->path->value."\\".$new_folder->name;
 
-            if (!Storage::exists('public\\'.$path_value)) {
+            if (!Paths::where([ 'value' => $path_value ])->exists()) {
                 # code...
                 $path = Paths::create(
                     [
@@ -138,36 +137,30 @@ class DossierSimpleController extends Controller
                     $services = json_decode($request->services);
 
                     $this->add_to_services($services, $new_folder->id, 'App\Models\DossierSimple');
-
-                    // foreach($services as $service)
-                    // {
-                    //     Serviable::create(
-                    //         [
-                    //             'service_id' => $service->value,
-                    //             'serviable_id' => $new_folder->id,
-                    //             'serviable_type' => 'App\Models\DossierSimple',
-                    //         ]
-                    //     );
-                    // }
                 }
-                else {
-                    $saved = false;
-                    $errorResponse = ["msg" => "storingError", "value" => "Error : Creating folder not work, return false. Path: "."public\\".$path_value];
+                else
+                {
+                    throw new Exception('Erreur de stockage: La création en stockage a échoué.', 1);
                 }
 
             }
             else
             {
-                $saved = false;
-                $errorResponse = "existAlready";
+                throw new Exception('Le dossier existe déjà.', 0);
             }
 
 
         }
-        catch (\Throwable $th) {
+        catch (\Throwable $th)
+        {
             //throw $th;
             $saved = false;
-            $errorResponse = ["msg" => "catchException", "value" => $th->getMessage()];
+
+            $error_object = new \stdClass();
+
+            $error_object->line = $th->getLine();
+            $error_object->msg = $th->getMessage();
+            $error_object->code = $th->getCode();
         }
 
         if($saved)
@@ -186,9 +179,7 @@ class DossierSimpleController extends Controller
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
-
-            return ResponseTrait::get('error', $errorResponse) ;
+            return ResponseTrait::get('error', $error_object) ;
         }
 
         // DB::endTransaction();
@@ -302,6 +293,96 @@ class DossierSimpleController extends Controller
         }
     }
 
+    protected function update_path($folder)
+    {
+        $parent = $folder->parent;
+
+        $folder->path->value = $parent->path->value."\\".$folder->name;
+
+        $folder->push();
+        $folder->refresh();
+
+        foreach ($folder->dossiers as $sub_folder)
+        {
+            $this->update_path($sub_folder);
+
+            $sub_folder->refresh();
+            array_push($GLOBALS['to_broadcast'], $sub_folder);
+        }
+
+        foreach ( $folder->fichiers as $fichier )
+        {
+            $file_controller = new FichierController();
+
+            $file_controller->update_path($fichier);
+
+            $fichier->refresh();
+            array_push($GLOBALS['to_broadcast'], $fichier);
+        }
+
+        return $folder->path->value;
+
+    }
+
+    protected function attach_children($old_folder, $new_folder)
+    {
+        $file_controller = new FichierController();
+
+        foreach ($old_folder->dossiers as $dossier)
+        {
+            if ( Paths::where([ 'value' => $new_folder->path->value.'\\'.$dossier->name ])->exists() )
+            {
+                $existant_folder = Paths::where([ 'value' => $new_folder->path->value.'\\'.$dossier->name ])->first()->routable;
+
+                $this->attach_children($dossier, $existant_folder);
+
+                $existant_folder->refresh();
+                $dossier->refresh();
+                array_push($GLOBALS['to_delete'], $dossier);
+            }
+            else
+            {
+                $dossier->parent_id = $new_folder->id;
+                $dossier->parent_type = 'App\Models\DossierSimple';
+
+                $dossier->push();
+
+                $this->update_path($dossier);
+
+                $dossier->refresh();
+                array_push($GLOBALS['to_broadcast'], $dossier);
+            }
+        }
+        foreach ($old_folder->fichiers as $fichier)
+        {
+            if ( Paths::where([ 'value' => $new_folder->path->value.'\\'.$fichier->name ])->exists() )
+            {
+                $path = Paths::where([ 'value' => $new_folder->path->value.'\\'.$fichier->name ])->first();
+
+                $existant_file = $path->routable;
+
+                $file_controller->del_file(
+                    new Request(
+                        [
+                            'id' => $existant_file->id,
+                        ]
+                    )
+                );
+
+            }
+
+            $fichier->parent_id = $new_folder->id;
+            $fichier->parent_type = 'App\Models\DossierSimple';
+
+            $fichier->push();
+
+            $file_controller->update_path($fichier);
+
+            $fichier->refresh();
+            array_push($GLOBALS['to_broadcast'], $fichier);
+        }
+    }
+
     public function move_folder(Request $request)
     {
 
@@ -310,96 +391,6 @@ class DossierSimpleController extends Controller
         $goes_well = true;
         $GLOBALS['to_broadcast'] = [];
         $GLOBALS['to_delete'] = [];
-
-        function update_path($folder)
-        {
-            $parent = $folder->parent;
-
-            $folder->path->value = $parent->path->value."\\".$folder->name;
-
-            $folder->push();
-            $folder->refresh();
-
-            foreach ($folder->dossiers as $sub_folder)
-            {
-                update_path($sub_folder);
-
-                $sub_folder->refresh();
-                array_push($GLOBALS['to_broadcast'], $sub_folder);
-            }
-
-            foreach ( $folder->fichiers as $fichier )
-            {
-                $file_controller = new FichierController();
-
-                $file_controller->update_path($fichier);
-
-                $fichier->refresh();
-                array_push($GLOBALS['to_broadcast'], $fichier);
-            }
-
-            return $folder->path->value;
-
-        }
-
-        function attach_children($old_folder, $new_folder)
-        {
-            $file_controller = new FichierController();
-
-            foreach ($old_folder->dossiers as $dossier)
-            {
-                if ( Paths::where([ 'value' => $new_folder->path->value.'\\'.$dossier->name ])->exists() )
-                {
-                    $existant_folder = Paths::where([ 'value' => $new_folder->path->value.'\\'.$dossier->name ])->first()->routable;
-
-                    attach_children($dossier, $existant_folder);
-
-                    $existant_folder->refresh();
-                    $dossier->refresh();
-                    array_push($GLOBALS['to_delete'], $dossier);
-                }
-                else
-                {
-                    $dossier->parent_id = $new_folder->id;
-                    $dossier->parent_type = 'App\Models\DossierSimple';
-
-                    $dossier->push();
-
-                    update_path($dossier);
-
-                    $dossier->refresh();
-                    array_push($GLOBALS['to_broadcast'], $dossier);
-                }
-            }
-            foreach ($old_folder->fichiers as $fichier)
-            {
-                if ( Paths::where([ 'value' => $new_folder->path->value.'\\'.$fichier->name ])->exists() )
-                {
-                    $path = Paths::where([ 'value' => $new_folder->path->value.'\\'.$fichier->name ])->first();
-
-                    $existant_file = $path->routable;
-
-                    $file_controller->del_file(
-                        new Request(
-                            [
-                                'id' => $existant_file->id,
-                            ]
-                        )
-                    );
-
-                }
-
-                $fichier->parent_id = $new_folder->id;
-                $fichier->parent_type = 'App\Models\DossierSimple';
-
-                $fichier->push();
-
-                $file_controller->update_path($fichier);
-
-                $fichier->refresh();
-                array_push($GLOBALS['to_broadcast'], $fichier);
-            }
-        }
 
         try
         {
@@ -414,12 +405,7 @@ class DossierSimpleController extends Controller
 
             $destination = $this->find_node($request->destination_id, $request->destination_type);
 
-//            DossierSimple::where('id', $request->id)->update(
-//                [
-//                    'parent_id' => $request->destination_id,
-//                    'parent_type' => $request->destination_type
-//                ]
-//            );
+            if (strpos($destination->path->value, $old_folder->path->value) !== false) throw new Exception('Le dossier de destination est un sous-dossier du dossier source.', -1);
 
             if ( Paths::where([ 'value' => $destination->path->value.'\\'.$old_folder->name ])->exists() )
             {
@@ -459,7 +445,7 @@ class DossierSimpleController extends Controller
 
                         $new_folder = $old_folder->refresh();
 
-                        $to = json_decode( json_encode( storage_path().'\app\public\\'.update_path($new_folder) ) );
+                        $to = json_decode( json_encode( storage_path().'\app\public\\'. $this->update_path($new_folder)) );
 
                         $goes_well = File::moveDirectory(
                             $from,
@@ -492,7 +478,7 @@ class DossierSimpleController extends Controller
 //                        }
 //                        Storage::deleteDirectory('public\\'.$destination->path->value.'\\'.$old_folder->name);
 
-                        attach_children($old_folder, $new_folder);
+                        $this->attach_children($old_folder, $new_folder);
 
                         $new_folder->refresh();
 //                        $new_folder->dossiers;
@@ -531,7 +517,7 @@ class DossierSimpleController extends Controller
                 $old_folder->refresh();
                 $new_folder = $old_folder;
 
-                $to = json_decode( json_encode( storage_path().'\app\public\\'.update_path($new_folder) ) );
+                $to = json_decode( json_encode( storage_path().'\app\public\\'. $this->update_path($new_folder)) );
 
                 $goes_well = File::moveDirectory(
                     $from,
@@ -548,7 +534,16 @@ class DossierSimpleController extends Controller
         catch (\Throwable $th)
         {
             $GLOBALS['to_broadcast'] = [];
-            return ResponseTrait::get('error', 'Line: '.$th->getLine().'; '.$th->getMessage());
+
+            DB::rollBack();
+
+            $error_object = new \stdClass();
+
+            $error_object->line = $th->getLine();
+            $error_object->msg = $th->getMessage();
+            $error_object->code = $th->getCode();
+
+            return ResponseTrait::get('error', $error_object);
         }
 
 
@@ -593,6 +588,90 @@ class DossierSimpleController extends Controller
 
     }
 
+    protected function create_children($old_folder, $new_folder)
+    {
+        foreach ( $old_folder->dossiers as $dossier )
+        {
+
+            if ( Paths::where( [ 'value' => $new_folder->path->value.'\\'.$dossier->name ] )->exists() )
+            {
+                $nv_dossier = Paths::where( [ 'value' => $new_folder->path->value.'\\'.$dossier->name ] )->first()->routable;
+
+                $nv_dossier->services()->detach();
+                foreach ($new_folder->services as $service)
+                {
+                    $nv_dossier->services()->attach($service->id);
+                }
+            }
+            else
+            {
+                $nv_dossier = new DossierSimple(
+                    [
+                        'name' => $dossier->name,
+                        'section_id' => $new_folder->section_id,
+                    ]
+                );
+
+                $new_folder->dossiers()->save($nv_dossier);
+                $new_folder->refresh();
+
+                $nv_dossier->path()->create(
+                    [
+                        'value' => $new_folder->path->value.'\\'.$nv_dossier->name
+                    ]
+                );
+                foreach ($new_folder->services as $service)
+                {
+                    $nv_dossier->services()->attach($service->id);
+                }
+
+                array_push($GLOBALS['to_broadcast'], $nv_dossier);
+            }
+
+            $this->create_children($dossier, $nv_dossier);
+        }
+        foreach ( $old_folder->fichiers as $fichier )
+        {
+            if ( !Paths::where( [ 'value' => $new_folder->path->value.'\\'.$fichier->name ] )->exists() )
+            {
+                $new_file = new Fichier(
+                    [
+                        'name' => $fichier->name,
+                        'section_id' => $new_folder->section_id,
+                        'size' => $fichier->size,
+                        'extension' => $fichier->extension,
+                    ]
+                );
+
+                $new_folder->fichiers()->save($new_file);
+                $new_folder->refresh();
+
+                $new_file->path()->create(
+                    [
+                        'value' => $new_folder->path->value.'\\'.$new_file->name
+                    ]
+                );
+                foreach ($new_folder->services as $service)
+                {
+                    $new_file->services()->attach($service->id);
+                }
+
+//                $new_file->path;
+                array_push($GLOBALS['to_broadcast'], $new_file);
+            }
+            else
+            {
+                $new_file = Paths::where( [ 'value' => $new_folder->path->value.'\\'.$fichier->name ] )->first()->routable;
+
+                $new_file->services()->detach();
+                foreach ($new_folder->services as $service)
+                {
+                    $new_file->services()->attach($service->id);
+                }
+            }
+        }
+    }
+
     public function copy_folder(Request $request)
     {
 
@@ -601,90 +680,11 @@ class DossierSimpleController extends Controller
         $goes_well = true;
 
         $GLOBALS['to_broadcast'] = [];
-
-        function create_children($old_folder, $new_folder)
-        {
-            foreach ( $old_folder->dossiers as $dossier )
-            {
-
-                if ( Paths::where( [ 'value' => $new_folder->path->value.'\\'.$dossier->name ] )->exists() )
-                {
-                    $nv_dossier = Paths::where( [ 'value' => $new_folder->path->value.'\\'.$dossier->name ] )->first()->routable;
-
-                    $nv_dossier->services()->detach();
-                    foreach ($new_folder->services as $service)
-                    {
-                        $nv_dossier->services()->attach($service->id);
-                    }
-                }
-                else
-                {
-                    $nv_dossier = new DossierSimple(
-                        [
-                            'name' => $dossier->name,
-                            'section_id' => $new_folder->section_id,
-                        ]
-                    );
-
-                    $new_folder->dossiers()->save($nv_dossier);
-                    $new_folder->refresh();
-
-                    $nv_dossier->path()->create(
-                        [
-                            'value' => $new_folder->path->value.'\\'.$nv_dossier->name
-                        ]
-                    );
-                    foreach ($new_folder->services as $service)
-                    {
-                        $nv_dossier->services()->attach($service->id);
-                    }
-
-                    array_push($GLOBALS['to_broadcast'], $nv_dossier);
-                }
-
-                create_children($dossier, $nv_dossier);
-            }
-            foreach ( $old_folder->fichiers as $fichier )
-            {
-                if ( !Paths::where( [ 'value' => $new_folder->path->value.'\\'.$fichier->name ] )->exists() )
-                {
-                    $new_file = new Fichier(
-                        [
-                            'name' => $fichier->name,
-                            'section_id' => $new_folder->section_id,
-                            'size' => $fichier->size,
-                            'extension' => $fichier->extension,
-                        ]
-                    );
-
-                    $new_folder->fichiers()->save($new_file);
-                    $new_folder->refresh();
-
-                    $new_file->path()->create(
-                        [
-                            'value' => $new_folder->path->value.'\\'.$new_file->name
-                        ]
-                    );
-                    foreach ($new_folder->services as $service)
-                    {
-                        $new_file->services()->attach($service->id);
-                    }
-
-//                $new_file->path;
-                    array_push($GLOBALS['to_broadcast'], $new_file);
-                }
-                else
-                {
-                    $new_file = Paths::where( [ 'value' => $new_folder->path->value.'\\'.$fichier->name ] )->first()->routable;
-
-                    $new_file->services()->detach();
-                    foreach ($new_folder->services as $service)
-                    {
-                        $new_file->services()->attach($service->id);
-                    }
-                }
-            }
-        }
+//        if ((int)$request->on_exist === -1)
+//        {
+//            DB::rollBack();
+//            return $request;
+//        }
 
         try
         {
@@ -692,14 +692,16 @@ class DossierSimpleController extends Controller
                 'destination_id' => ['required', 'integer'],
                 'destination_type' => ['required', 'string', 'max:255'],
                 'id' => ['required', 'integer'],
-                'section_id' => ['required', 'integer'],
-                'services' => ['required', 'string'],
             ]);
+
+//            throw new Exception('lalala');
 
             $old_folder = DossierSimple::find($request->id);
             $from = json_decode( json_encode( storage_path().'\app\public\\'.$old_folder->path->value ) );
 
             $destination = $this->find_node($request->destination_id, $request->destination_type);
+
+            if (strpos($destination->path->value, $old_folder->path->value) !== false) throw new Exception('Le dossier de destination est un sous-dossier du dossier source.', -1);
 
             if (Paths::where([ 'value' => $destination->path->value.'\\'.$old_folder->name ])->exists())
             {
@@ -718,10 +720,12 @@ class DossierSimpleController extends Controller
                     }
                     case 2:
                     {
+//                        return $request;
                         $num_copy = 1;
                         $new_name = $old_folder->name;
 
-                        while (Storage::exists('public\\'.$destination->path->value.'\\'.$new_name)) {
+                        while ( Paths::where([ 'value' => $destination->path->value.'\\'.$new_name ])->exists() )
+                        {
                             # code...
 
                             $set_num = $num_copy == 1 ? "" : " ($num_copy)";
@@ -755,7 +759,7 @@ class DossierSimpleController extends Controller
 
                         $renamed_dossier->refresh();
 
-                        create_children($old_folder, $renamed_dossier);
+                        $this->create_children($old_folder, $renamed_dossier);
 
                         $renamed_dossier->refresh();
 //                        $renamed_dossier->dossiers; $renamed_dossier->fichiers;
@@ -792,7 +796,7 @@ class DossierSimpleController extends Controller
 //                        }
 //                        Storage::deleteDirectory('public\\'.$destination->path->value.'\\'.$old_folder->name);
 
-                        create_children($old_folder, $new_folder);
+                        $this->create_children($old_folder, $new_folder);
 
                         $new_folder->refresh();
 //                        $new_folder->dossiers;
@@ -836,7 +840,7 @@ class DossierSimpleController extends Controller
 
                 $new_folder->refresh();
 
-                create_children($old_folder, $new_folder);
+                $this->create_children($old_folder, $new_folder);
 
                 $new_folder->refresh();
 //                        $new_folder->dossiers; $new_folder->fichiers;
@@ -857,7 +861,16 @@ class DossierSimpleController extends Controller
         catch (\Throwable $th)
         {
             $GLOBALS['to_broadcast'] = [];
-            return ResponseTrait::get('error', 'Line: '.$th->getLine().': '.$th->getMessage());
+
+            DB::rollBack();
+
+            $error_object = new \stdClass();
+
+            $error_object->line = $th->getLine();
+            $error_object->msg = $th->getMessage();
+            $error_object->code = $th->getCode();
+
+            return ResponseTrait::get('error', $error_object);
         }
 
 

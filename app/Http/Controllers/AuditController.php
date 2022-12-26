@@ -9,6 +9,7 @@ use App\Models\Audit;
 use App\Models\Paths;
 use App\Models\checkList;
 use App\Models\Serviable;
+use Exception;
 use Illuminate\Http\Request;
 use App\Models\DossierPreuve;
 use App\Events\NodeUpdateEvent;
@@ -60,11 +61,13 @@ class AuditController extends Controller
     {
        $audits = Audit::all();
 
-       foreach ($audits as $key => $audit) {
-        # code...
+       foreach ($audits as $key => $audit)
+       {
+           # code...
 
-        $audit->services;
-        $audit->user;
+           $audit->services;
+           $audit->user;
+           $audit->users;
 
        }
 
@@ -86,21 +89,37 @@ class AuditController extends Controller
                 'name' => ['required', 'string', 'max:255'],
                 'section_id' => ['required', 'integer'],
                 'services' => ['required', 'string'],
+                'inspectors' => ['required', 'string'],
                 'ra_id' => ['required', 'integer'],
             ]);
 
-            $new_audit = null;
+            try {
+                $new_audit = new Audit(
+                    [
+                        'name' => $request->name,
+                        'section_id' => $request->section_id,
+                        'user_id' => $request->ra_id,
+                    ]
+                );
 
-            $new_audit = Audit::create(
-                [
-                    'name' => $request->name,
-                    'section_id' => $request->section_id,
-                    'user_id' => $request->ra_id,
-                ]
-            );
+                $new_audit->push();
+            }
+            catch (\Throwable $th)
+            {
+                throw new Exception("L'audit existe déjà.", 0);
+            }
+
+            $inspector_ids = json_decode($request->inspectors) ?? [Auth::user()->id];
+
+            foreach ($inspector_ids as $inspector_id)
+            {
+                $new_audit->users()->attach($inspector_id);
+            }
+            $new_audit->refresh();
 
             $audit_path = $new_audit->section->path->value.'\\'.$new_audit->name;
 
+//            if (Paths::where([ 'value' => $audit_path ])->exists()) throw new Exception("L'audit existe déjà.", 0);
 
 
 //            $new_checkList = checkList::create( ['audit_id'=> $new_audit->id, 'section_id' => $request->section_id] );
@@ -168,8 +187,7 @@ class AuditController extends Controller
             }
             else
             {
-                $saved = false;
-                $errorResponse = ["msg" => "storingError", "value" => "Error : Creating folder not work, return false"];
+                throw new Exception('Erreur de stockage: La création en stockage a échoué.', 1);
             }
 
 
@@ -177,7 +195,12 @@ class AuditController extends Controller
         catch (\Throwable $th) {
             //throw $th;
             $saved = false;
-            $errorResponse = ["msg" => "catchException", "value" => $th];
+
+            $error_object = new \stdClass();
+
+            $error_object->line = $th->getLine();
+            $error_object->msg = $th->getMessage();
+            $error_object->code = $th->getCode();
         }
 
         if($saved)
@@ -187,17 +210,16 @@ class AuditController extends Controller
             $getId = function($element){ if($element->sub_type != null) return $element->id.'-'.$element->sub_type; return $element->id.'-audit'; };
 
             NodeUpdateEvent::dispatch('audit', array_map( $getId, $audit_family ), 'add');
+
+            return ResponseTrait::get('success', AuditController::find($new_audit->id));
         }
         else
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
+
+            return ResponseTrait::get('error', $error_object);
         }
 
-        // DB::endTransaction();
-
-        $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
-
-        return $saved ? ResponseTrait::get('success', AuditController::find($new_audit->id)) : ResponseTrait::get('error', $errorResponse) ;
 
     }
 

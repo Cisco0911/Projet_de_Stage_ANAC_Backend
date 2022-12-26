@@ -96,6 +96,7 @@ class Audit extends Model
             $audit->checklist->delete();
             $audit->dossier_preuve->delete();
             $audit->nc->delete();
+            $audit->users()->detach();
             $audit->services()->detach();
             $audit->path()->delete();
             $audit->operation()->delete();

@@ -7,6 +7,7 @@ use App\Http\Traits\ResponseTrait;
 use App\Models\User;
 use App\Models\Paths;
 use App\Models\Fichier;
+use Exception;
 use Illuminate\Http\Request;
 use App\Events\NodeUpdateEvent;
 use Illuminate\Support\Facades\DB;
@@ -184,7 +185,7 @@ class FichierController extends Controller
 
                 $num_copy = 1;
 
-                while (Storage::exists("public\\".$path_value)) {
+                while ( Paths::where([ 'value' => $path_value ])->exists() ) {
                     # code...
 
                     $filename = "$original_name($num_copy)";
@@ -195,6 +196,8 @@ class FichierController extends Controller
 
                     $num_copy++;
                 }
+
+                if ( Storage::exists("public\\".$path_value) ) Storage::delete("public\\".$path_value);
 
                 if (!Storage::exists("public\\".$path_value)) {
                     # code...
@@ -219,9 +222,9 @@ class FichierController extends Controller
                         array_push($added_files, "public\\".$path->value);
                         array_push($new_files, $new_file);
                     }
-                    else {
-                        $saved = false;
-                        $errorResponse = ["msg" => "storingError", "value" => "Error : Creating folder not work, return false"];
+                    else
+                    {
+                        throw new Exception('Erreur de stockage: Le stockage du fichier a échoué.', 1);
                     }
 
                 }
@@ -229,7 +232,6 @@ class FichierController extends Controller
                 {
                     $saved = false;
                     array_push($failed_jobs, $full_name);
-                    $errorResponse = ['msg'=> "existAlready", 'value'=> $failed_jobs];
                 }
 
                 if(!is_null($double)) array_push($duplicated_files, $double);
@@ -240,10 +242,15 @@ class FichierController extends Controller
         catch (\Throwable $th) {
             //throw $th;
             $saved = false;
-            $errorResponse = ["msg" => "catchException File", "value" => $th];
+
+            $error_object = new \stdClass();
+
+            $error_object->line = $th->getLine();
+            $error_object->msg = $th->getMessage();
+            $error_object->code = $th->getCode();
         }
 
-        if($saved)
+        if($saved && empty($duplicated_files))
         {
             DB::commit(); // YES --> finalize it
             // $new_file->url = "http://localhost/overview_of?id=".$new_file->id;
@@ -252,24 +259,49 @@ class FichierController extends Controller
             $getId = function($element){ return $element->id.'-f'; };
 
             NodeUpdateEvent::dispatch('f', array_map( $getId, $new_files ), 'add');
+
+            $good = "ok";
+
+            return ResponseTrait::get('success', $good);
+        }
+        elseif ($saved && !empty($duplicated_files))
+        {
+            DB::commit(); // YES --> finalize it
+            // $new_file->url = "http://localhost/overview_of?id=".$new_file->id;
+            // $new_file->parent_type = "llllo";
+
+            $getId = function($element){ return $element->id.'-f'; };
+
+            NodeUpdateEvent::dispatch('f', array_map( $getId, $new_files ), 'add');
+
+            $good = ['msg' => 'duplicated', 'list' => $duplicated_files];
+
+            return ResponseTrait::get('success', $good);
+        }
+        elseif (!empty($failed_jobs) && empty($error_object))
+        {
+            Storage::delete($added_files);
+            DB::rollBack(); // NO --> some error has occurred undo the whole thing
+            $error_object = new \stdClass();
+
+            $error_object->msg = 'La création de ces fichiers a échoué';
+            $error_object->list = $failed_jobs;
+
+            return ResponseTrait::get('error', $error_object);
         }
         else
         {
             Storage::delete($added_files);
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
+
+            return ResponseTrait::get('error', $error_object);
         }
 
         // DB::endTransaction();
 
-        $good = empty($duplicated_files) ? "ok" : ['msg' => 'duplicated', 'value' => $duplicated_files];
-
-        $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
-
-        return $saved ? ResponseTrait::get('success', $good) : ResponseTrait::get('error', $errorResponse) ;
-
     }
 
-    function del_file(Request $request)
+    public function del_file(Request $request)
     {
 
         DB::beginTransaction();
@@ -345,7 +377,7 @@ class FichierController extends Controller
 
     }
 
-    function update_path($file)
+    public function update_path($file)
     {
         $parent = $file->parent;
 
@@ -498,6 +530,9 @@ class FichierController extends Controller
         }
         catch (\Throwable $th)
         {
+
+            DB::rollBack();
+
             return ResponseTrait::get('error', $th->getMessage());
         }
 
@@ -708,6 +743,9 @@ class FichierController extends Controller
         }
         catch (\Throwable $th)
         {
+
+            DB::rollBack();
+
             return ResponseTrait::get('error', $th->getMessage());
         }
 
@@ -718,7 +756,7 @@ class FichierController extends Controller
             DB::commit(); // YES --> finalize it
             try
             {
-                NodeUpdateEvent::dispatch('f', [$new_file->id.'-f'], "add");
+                if ((int)$request->on_exist != 1 )NodeUpdateEvent::dispatch('f', [$new_file->id.'-f'], "add");
             }
             catch (\Throwable $e)
             {}

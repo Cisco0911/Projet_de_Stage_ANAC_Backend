@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Paths;
 use Illuminate\Http\Request;
 
 use App\Http\Controllers\AuditController;
@@ -37,7 +38,7 @@ class NodeController extends Controller
 
     function find(array $jobs, $key, $isFnc = false)
     {
-        try
+        if (!is_int($key))
         {
             foreach ($jobs as $job)
             {
@@ -54,7 +55,7 @@ class NodeController extends Controller
                 }
             }
         }
-        catch (\Throwable $th)
+        else
         {
             foreach ($jobs as $job)
             {
@@ -333,7 +334,7 @@ class NodeController extends Controller
                             {
                                 if( !empty($job->dependencies) )
                                 {
-                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
+                                    $dependency_data = $this->find($jobs, (int)$job->dependencies[0]);
 
                                     if( $dependency_data->state == 'success' )
                                     {
@@ -388,6 +389,181 @@ class NodeController extends Controller
 
 //                                return $res;
 
+                                break;
+                            }
+                            case 'copy':
+                            {
+
+                                $destination_id = $job->data->destination_id;
+                                $destination_type = $job->data->destination_type;
+                                $id = $job->data->id;
+                                $on_exist = $job->data->on_exist;
+
+                                if( !empty($job->dependencies) )
+                                {
+                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
+
+                                    if ($dependency_data->state == 'error')
+                                    {
+                                        $job->etat = 'error';
+
+                                        $msg = new \stdClass();
+                                        $msg->msg = "dependency n'a pas marché";
+
+                                        $job->data = $msg;
+
+                                        $jobs[$key] = json_encode($job);
+
+                                        break;
+                                    }
+                                    elseif ($dependency_data->state == 'success')
+                                    {
+                                        $destination_id = $dependency_data->id;
+                                    }
+
+                                }
+                                if ( !empty($job->from_dependency) )
+                                {
+                                    $dependency_data = $this->find($jobs, $job->from_dependency[0]);
+
+                                    if ($dependency_data->state == 'error')
+                                    {
+                                        $job->etat = 'error';
+
+                                        $msg = new \stdClass();
+                                        $msg->msg = "from_dependency n'a pas marché";
+
+                                        $job->data = $msg;
+
+                                        $jobs[$key] = json_encode($job);
+
+                                        break;
+                                    }
+                                    elseif ($dependency_data->state == 'success')
+                                    {
+                                        $id = $dependency_data->id;
+                                    }
+
+                                }
+
+                                $res = $this->folderController->copy_folder(
+                                    new Request(
+                                        [
+                                            'destination_id' => $destination_id,
+                                            'destination_type' => $destination_type,
+                                            'id' => $id,
+                                            'on_exist' => $on_exist,
+                                        ]
+                                    )
+                                );
+
+//                                return $res;
+
+                                $job->etat = $res["statue"];
+                                $job->data = $res["data"];
+
+                                $jobs[$key] = json_encode($job);
+
+//                                return $jobs;
+                                break;
+                            }
+                            case 'add_copy':
+                            {
+
+                                $path = Paths::where(
+                                    [
+                                        'value' => $job->data->relative_path
+                                    ]
+                                )->first();
+
+                                if ($path)
+                                {
+                                    $new_folder = $path->routable;
+
+                                    $job->etat = "success";
+                                    $job->data = $new_folder;
+                                }
+                                else $job->etat = "error";
+
+
+                                $jobs[$key] = json_encode($job);
+
+//                                return $jobs;
+                                break;
+                            }
+                            case 'move':
+                            {
+
+                                $destination_id = $job->data->destination_id;
+                                $destination_type = $job->data->destination_type;
+                                $id = $job->data->id;
+                                $on_exist = $job->data->on_exist;
+
+                                if( !empty($job->dependencies) )
+                                {
+                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
+
+                                    if ($dependency_data->state == 'error')
+                                    {
+                                        $job->etat = 'error';
+
+                                        $msg = new \stdClass();
+                                        $msg->msg = "dependency n'a pas marché";
+
+                                        $job->data = $msg;
+
+                                        $jobs[$key] = json_encode($job);
+
+                                        break;
+                                    }
+                                    elseif ($dependency_data->state == 'success')
+                                    {
+                                        $destination_id = $dependency_data->id;
+                                    }
+                                }
+                                if ( !empty($job->from_dependency) )
+                                {
+                                    $dependency_data = $this->find($jobs, $job->from_dependency[0]);
+
+                                    if ($dependency_data->state == 'error')
+                                    {
+                                        $job->etat = 'error';
+
+                                        $msg = new \stdClass();
+                                        $msg->msg = "from_dependency n'a pas marché";
+
+                                        $job->data = $msg;
+
+                                        $jobs[$key] = json_encode($job);
+
+                                        break;
+                                    }
+                                    elseif ($dependency_data->state == 'success')
+                                    {
+                                        $id = $dependency_data->id;
+                                    }
+
+                                }
+
+                                $res = $this->folderController->move_folder(
+                                    new Request(
+                                        [
+                                            'destination_id' => $destination_id,
+                                            'destination_type' => $destination_type,
+                                            'id' => $id,
+                                            'on_exist' => $on_exist,
+                                        ]
+                                    )
+                                );
+
+//                                return $res;
+
+                                $job->etat = $res["statue"];
+                                $job->data = $res["data"];
+
+                                $jobs[$key] = json_encode($job);
+
+//                                return $jobs;
                                 break;
                             }
                             case 'update':
@@ -468,6 +644,182 @@ class NodeController extends Controller
 
                                 break;
                             }
+                            case 'copy':
+                            {
+
+                                $destination_id = $job->data->destination_id;
+                                $destination_type = $job->data->destination_type;
+                                $id = $job->data->id;
+                                $on_exist = $job->data->on_exist;
+
+                                if( !empty($job->dependencies) )
+                                {
+                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
+
+                                    if ($dependency_data->state == 'error')
+                                    {
+                                        $job->etat = 'error';
+
+                                        $msg = new \stdClass();
+                                        $msg->msg = "dependency n'a pas marché";
+
+                                        $job->data = $msg;
+
+                                        $jobs[$key] = json_encode($job);
+
+                                        break;
+                                    }
+                                    elseif ($dependency_data->state == 'success')
+                                    {
+                                        $destination_id = $dependency_data->id;
+                                    }
+
+                                }
+                                if ( !empty($job->from_dependency) )
+                                {
+                                    $dependency_data = $this->find($jobs, $job->from_dependency[0]);
+
+                                    if ($dependency_data->state == 'error')
+                                    {
+                                        $job->etat = 'error';
+
+                                        $msg = new \stdClass();
+                                        $msg->msg = "from_dependency n'a pas marché";
+
+                                        $job->data = $msg;
+
+                                        $jobs[$key] = json_encode($job);
+
+                                        break;
+                                    }
+                                    elseif ($dependency_data->state == 'success')
+                                    {
+                                        $id = $dependency_data->id;
+                                    }
+
+                                }
+
+                                $res = $this->fileController->copy_file(
+                                    new Request(
+                                        [
+                                            'destination_id' => $destination_id,
+                                            'destination_type' => $destination_type,
+                                            'id' => $id,
+                                            'on_exist' => $on_exist,
+                                        ]
+                                    )
+                                );
+
+                                $job->etat = $res["statue"];
+                                $job->data = $res["data"];
+
+                                $jobs[$key] = json_encode($job);
+
+//                                return $jobs;
+                                break;
+                            }
+                            case 'add_copy':
+                            {
+
+                                $path = Paths::where(
+                                    [
+                                        'value' => $job->data->relative_path
+                                    ]
+                                )->first();
+
+
+                                if ($path)
+                                {
+                                    $new_file = $path->routable;
+
+                                    $job->etat = "success";
+                                    $job->data = $new_file;
+                                }
+                                else $job->etat = "error";
+
+
+                                $jobs[$key] = json_encode($job);
+
+//                                return $jobs;
+                                break;
+                            }
+                            case 'move':
+                            {
+
+                                $destination_id = $job->data->destination_id;
+                                $destination_type = $job->data->destination_type;
+                                $id = $job->data->id;
+                                $on_exist = $job->data->on_exist;
+
+                                if( !empty($job->dependencies) )
+                                {
+                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
+
+                                    if ($dependency_data->state == 'error')
+                                    {
+                                        $job->etat = 'error';
+
+                                        $msg = new \stdClass();
+                                        $msg->msg = "dependency n'a pas marché";
+
+                                        $job->data = $msg;
+
+                                        $jobs[$key] = json_encode($job);
+
+                                        break;
+                                    }
+                                    elseif ($dependency_data->state == 'success')
+                                    {
+                                        $destination_id = $dependency_data->id;
+                                    }
+//                                    return [$dependency_data, $job];
+
+                                }
+                                if ( !empty($job->from_dependency) )
+                                {
+                                    $dependency_data = $this->find($jobs, $job->from_dependency[0]);
+
+                                    if ($dependency_data->state == 'error')
+                                    {
+                                        $job->etat = 'error';
+
+                                        $msg = new \stdClass();
+                                        $msg->msg = "from_dependency n'a pas marché";
+
+                                        $job->data = $msg;
+
+                                        $jobs[$key] = json_encode($job);
+
+                                        break;
+                                    }
+                                    elseif ($dependency_data->state == 'success')
+                                    {
+                                        $id = $dependency_data->id;
+                                    }
+
+                                }
+
+                                $res = $this->fileController->move_file(
+                                    new Request(
+                                        [
+                                            'destination_id' => $destination_id,
+                                            'destination_type' => $destination_type,
+                                            'id' => $id,
+                                            'on_exist' => $on_exist,
+                                        ]
+                                    )
+                                );
+
+//                                return $res;
+
+                                $job->etat = $res["statue"];
+                                $job->data = $res["data"];
+
+                                $jobs[$key] = json_encode($job);
+
+//                                return $jobs;
+                                break;
+                            }
                             case 'update':
                                 # code...
                                 break;
@@ -488,6 +840,8 @@ class NodeController extends Controller
             }
 
         }
+
+        return array_map(function( $job_element) { return json_decode($job_element);}, $jobs);
 
     }
 
