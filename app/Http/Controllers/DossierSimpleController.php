@@ -91,7 +91,6 @@ class DossierSimpleController extends Controller
         return $folder;
     }
 
-
     public function add_folder(Request $request)
     {
 
@@ -186,7 +185,6 @@ class DossierSimpleController extends Controller
 
     }
 
-
     public function del_folder(Request $request)
     {
 
@@ -204,42 +202,47 @@ class DossierSimpleController extends Controller
 
             $cache = $this->format($target);
 
-            if(Auth::user()->validator_id == null)
+            $feasible = $this->can_modify_node($target);
+
+            if($feasible)
             {
+                if ($feasible == 2)
+                {
+                    // dd($request);
 
-                // dd($request);
+                    $pathInStorage = "public\\".$target->path->value;
 
-                $pathInStorage = "public\\".$target->path->value;
+                    $target->delete();
+                }
+                else
+                {
+                    try {
+                        $new_operation = operationNotification::create(
+                            [
+                                'operable_id' => $cache->id,
+                                'operable_type' => "App\Models\DossierSimple",
+                                'operation_type' => 'deletion',
+                                'from_id' => Auth::id(),
+                                'validator_id' => $target->validator_id
+                            ]
+                        );
+                    }
+                    catch (\Throwable $th) {
+                        return \response(ResponseTrait::get('error', 'en attente'), 500);
 
-                // $target->path->delete();
+                    }
 
-                // $this->del_from_services($target->services, $target->id, 'App\Models\DossierSimple');
+                    $new_operation->operable;
+                    $new_operation->front_type = 'ds';
+                    Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Dossier', $new_operation, Auth::user()));
+                    DB::commit();
+                    return ResponseTrait::get('success', 'attente');
+                }
 
-                $target->delete();
             }
             else
             {
-                try {
-                    $new_operation = operationNotification::create(
-                        [
-                            'operable_id' => $cache->id,
-                            'operable_type' => "App\Models\DossierSimple",
-                            'operation_type' => 'deletion',
-                            'from_id' => Auth::user()->id,
-                            'validator_id' => Auth::user()->validator_id
-                        ]
-                    );
-                }
-                catch (\Throwable $th) {
-                    return \response(ResponseTrait::get('error', 'en attente'), 500);
-
-                }
-
-                $new_operation->operable;
-                $new_operation->front_type = 'ds';
-                Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Dossier', $new_operation, Auth::user()));
-                DB::commit();
-                return ResponseTrait::get('success', 'attente');
+                throw new Exception("Vous n'avez pas les droits nécessaires");
             }
             // RemovalEvent::dispatch('Dossier', $cache, Auth::user());
 
@@ -267,6 +270,76 @@ class DossierSimpleController extends Controller
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
             return \response(ResponseTrait::get('error', $th2->getMessage()), 500);
+        }
+
+    }
+
+    function update_folder( Request $request )
+    {
+
+        DB::beginTransaction();
+
+        $goesWell = true;
+
+
+        try
+        {
+
+            $request->validate([
+                'id' => ['required', 'integer'],
+                'update_object' => ['required', 'string'],
+                'new_value' => ['required'],
+            ]);
+
+            $folder = DossierSimple::find($request->id);
+
+            switch ($request->update_object)
+            {
+                case 'is_validated':
+                {
+
+                    if ( !$this->can_modify_valid_state($folder) )
+                    {
+                        throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+                    }
+
+                    $folder->is_validated = $request->new_value;
+                    $folder->push();
+                    $folder->refresh();
+
+                    break;
+                }
+                default:
+                    return ResponseTrait::get('success', 'Nothing was done');
+            }
+
+        }
+        catch (\Throwable $th) {
+            //throw $th;
+            $goesWell = false;
+
+            $error_object = new \stdClass();
+
+            $error_object->line = $th->getLine();
+            $error_object->msg = $th->getMessage();
+            $error_object->code = $th->getCode();
+        }
+
+        if($goesWell)
+        {
+            DB::commit(); // YES --> finalize it
+
+            // $getId = function($element){ return $element->id.'-fnc'; }; array_map( $getId, $request )
+
+            NodeUpdateEvent::dispatch('ds', [$request->id.'-ds'], "update");
+
+            return ResponseTrait::get('success', $folder);
+        }
+        else
+        {
+            DB::rollBack(); // NO --> some error has occurred undo the whole thing
+
+            return \response(ResponseTrait::get('error', $error_object), 500);
         }
 
     }

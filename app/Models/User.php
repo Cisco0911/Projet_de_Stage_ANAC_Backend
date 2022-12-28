@@ -76,6 +76,11 @@ class User extends Authenticatable
         return $this->morphToMany(Service::class, 'serviable');
     }
 
+    public function validated_folders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(DossierSimple::class);
+    }
+
     public function operationNotifications(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(operationNotification::class, 'validator_id');

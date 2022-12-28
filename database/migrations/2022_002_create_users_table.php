@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('inspector_number')->unique();
             $table->string('email')->unique();
             $table->string('password');
+            $table->integer('right_lvl', false, true)->default(0);
             $table->rememberToken();
             $table->timestamps();
         });

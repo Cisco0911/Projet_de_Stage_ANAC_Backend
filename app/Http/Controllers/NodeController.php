@@ -403,7 +403,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->find($jobs, $job->dependencies[0]);
 
-                                    if ($dependency_data->state == 'error')
+                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -426,7 +426,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->find($jobs, $job->from_dependency[0]);
 
-                                    if ($dependency_data->state == 'error')
+                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -503,7 +503,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->find($jobs, $job->dependencies[0]);
 
-                                    if ($dependency_data->state == 'error')
+                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -525,7 +525,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->find($jobs, $job->from_dependency[0]);
 
-                                    if ($dependency_data->state == 'error')
+                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -656,7 +656,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->find($jobs, $job->dependencies[0]);
 
-                                    if ($dependency_data->state == 'error')
+                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -679,7 +679,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->find($jobs, $job->from_dependency[0]);
 
-                                    if ($dependency_data->state == 'error')
+                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -755,7 +755,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->find($jobs, $job->dependencies[0]);
 
-                                    if ($dependency_data->state == 'error')
+                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -779,7 +779,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->find($jobs, $job->from_dependency[0]);
 
-                                    if ($dependency_data->state == 'error')
+                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 

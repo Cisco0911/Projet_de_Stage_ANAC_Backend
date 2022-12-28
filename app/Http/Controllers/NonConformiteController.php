@@ -98,7 +98,7 @@ class NonConformiteController extends Controller
         DB::beginTransaction();
 
         $saved = true;
-        $errorResponse = null;
+        $existing_fnc = [];
         $new_fncs = [];
 
         try {
@@ -135,7 +135,7 @@ class NonConformiteController extends Controller
                 # code...
                 if (!$isException($exceptions, $i))
                 {
-                    $new_fnc = NonConformite::create(
+                    $new_fnc = new NonConformite(
                         [
                             'name' => 'FNC-'.$audit->name."-$i",
                             'level' => $request->level,
@@ -145,9 +145,11 @@ class NonConformiteController extends Controller
                         ]
                     );
 
+                    $new_fnc->push();
+
                     $path_value = $new_fnc->nc->path->value."\\".$new_fnc->name;
 
-                    if (!Storage::exists('public\\'.$path_value)) {
+                    if (!Paths::where([ 'value' => $path_value ])->exists()) {
                         # code...
                         $path = Paths::create(
                             [
@@ -166,25 +168,30 @@ class NonConformiteController extends Controller
                             $new_fncs["$i"] = $new_fnc;
                         }
                         else {
-                            $saved = false;
-                            $errorResponse = ["msg" => "storingError", "value" => "Error : Creating folder not work, return false"];
+                            throw new Exception('Erreur de stockage: La création en stockage a échoué.', 1);
                         }
 
                     }
                     else
                     {
-                        $saved = false;
-                        $errorResponse = "existAlready";
+                        array_push($existing_fnc, $new_fnc->name);
+                        $new_fncs["$i"] = Paths::where([ 'value' => $path_value ])->first()->routable;
+                        $new_fnc->delete();
                     }
                 }
             }
 
 
         }
-        catch (\Throwable $th) {
-            //throw $th;
+        catch (\Throwable $th)
+        {
             $saved = false;
-            $errorResponse = ["msg" => "catchException", "value" => $th->getMessage()];
+
+            $error_object = new \stdClass();
+
+            $error_object->line = $th->getLine();
+            $error_object->msg = $th->getMessage();
+            $error_object->code = $th->getCode();
         }
 
         if($saved)
@@ -196,10 +203,14 @@ class NonConformiteController extends Controller
             $fnc_list = [];
             foreach ($new_fncs as $fnc)
             {
-                array_push($fnc_list, $fnc);
+                if ( !array_search($fnc->name, $existing_fnc) ) array_push($fnc_list, $fnc);
             }
 
             NodeUpdateEvent::dispatch('fnc', array_map( $getId, $fnc_list ), 'add');
+
+            if (!empty($existing_fnc)) $new_fncs['existing_fnc'] = $existing_fnc;
+
+            return ResponseTrait::get('success', $new_fncs);
         }
         else
         {
@@ -209,12 +220,9 @@ class NonConformiteController extends Controller
             }
 
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
+
+            return  ResponseTrait::get('error', $error_object);
         }
-
-
-        $errorResponse = $errorResponse == null ? "Something went wrong !" : $errorResponse;
-
-        return $saved ? ResponseTrait::get('success', $new_fncs) : ResponseTrait::get('error', $errorResponse) ;
 
 
     }

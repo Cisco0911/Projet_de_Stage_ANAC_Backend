@@ -40,6 +40,11 @@ class DossierSimple extends Model
         return $this->morphTo();
     }
 
+    public function validator()
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function fichiers()
     {
         return $this->morphMany(Fichier::class, 'parent');
