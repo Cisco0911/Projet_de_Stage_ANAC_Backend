@@ -6,7 +6,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\operationNotification;
-use App\Notifications\RemovalResponse;
+use App\Notifications\InfoNotification;
 use Illuminate\Support\Facades\Notification;
 
 class OperationNotificationController extends Controller
@@ -24,7 +24,7 @@ class OperationNotificationController extends Controller
             'from' => ['required', 'string'],
         ]);
 
-        $msg = 
+        $msg =
         [
             'object' => $request->object,
             'value' => $request->value,
@@ -33,7 +33,7 @@ class OperationNotificationController extends Controller
 
         if( $msg['object'] == 'rejected' ) operationNotification::where([ 'operable_id' =>  $msg['attachment']->operable->id])->delete();
 
-        Notification::sendNow(User::find($request->to), new RemovalResponse($msg, json_decode($request->from)) );
+        Notification::sendNow(User::find($request->to), new InfoNotification($msg, json_decode($request->from)) );
 
         return $msg['attachment'];
     }

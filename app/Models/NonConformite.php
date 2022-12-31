@@ -28,7 +28,7 @@ class NonConformite extends Model
 
 
 
-    public function nc()
+    public function nc_folder()
     {
         return $this->belongsTo(Nc::class);
     }
@@ -68,7 +68,7 @@ class NonConformite extends Model
         parent::boot();
 
         static::deleting(function($fnc) { // before delete() method call this
-            
+
             foreach ($fnc->dossiers as $key => $child_folder) $child_folder->delete();
             foreach ($fnc->fichiers as $key => $child_file) $child_file->delete();
 

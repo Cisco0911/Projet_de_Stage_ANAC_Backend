@@ -81,14 +81,14 @@ class User extends Authenticatable
         return $this->hasMany(DossierSimple::class);
     }
 
-    public function operationNotifications(): \Illuminate\Database\Eloquent\Relations\HasMany
-    {
-        return $this->hasMany(operationNotification::class, 'validator_id');
-    }
-
-    public function operationInQueue(): \Illuminate\Database\Eloquent\Relations\HasMany
-    {
-        return $this->hasMany(operationNotification::class, 'from_id');
-    }
+//    public function operationNotifications(): \Illuminate\Database\Eloquent\Relations\HasMany
+//    {
+//        return $this->hasMany(operationNotification::class, 'validator_id');
+//    }
+//
+//    public function operationInQueue(): \Illuminate\Database\Eloquent\Relations\HasMany
+//    {
+//        return $this->hasMany(operationNotification::class, 'from_id');
+//    }
 
 }

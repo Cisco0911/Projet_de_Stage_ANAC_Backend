@@ -9,6 +9,8 @@ use App\Http\Controllers\DossierSimpleController;
 use App\Http\Controllers\NcController;
 use App\Http\Controllers\NonConformiteController;
 use App\Http\Controllers\SectionController;
+use App\Http\Controllers\UserController;
+use App\Notifications\AskPermission;
 use Illuminate\Support\Facades\Auth;
 
 trait NodeTrait
@@ -71,5 +73,91 @@ trait NodeTrait
 
         return false;
     }
+
+    protected function valid_node($node)
+    {
+        if (!$node->is_validated)
+        {
+            $node->is_validated = 1;
+            $node->validator_id = Auth::id();
+            $node->push();
+
+            $node->refresh();
+
+            array_push($GLOBALS['to_broadcast'], $node);
+        }
+
+        if (!empty($node->dossiers))
+        {
+            foreach ($node->dossiers as $dossier) $this->valid_node($dossier);
+        }
+
+        if (!empty($node->fichiers))
+        {
+            foreach ($node->fichiers as $fichier) $this->valid_node($fichier);
+        }
+
+        if (!empty($node->checklist))
+        {
+            $this->valid_node($node->checklist);
+        }
+
+        if (!empty($node->dossier_preuve))
+        {
+            $this->valid_node($node->dossier_preuve);
+        }
+
+        if (!empty($node->nc))
+        {
+            $this->valid_node($node->nc);
+        }
+
+        if (!empty($node->fncs))
+        {
+            foreach ($node->fncs as $fnc) $this->valid_node($fnc);
+        }
+
+        return $node;
+    }
+
+    protected function unvalid_node($node)
+    {
+        if ($node->is_validated)
+        {
+            $node->is_validated = 0;
+            $node->validator_id = null;
+            $node->push();
+
+            $node->refresh();
+
+            array_push($GLOBALS['to_broadcast'], $node);
+        }
+
+        if (!empty($node->parent))
+        {
+            $this->unvalid_node($node->parent);
+        }
+
+        if (!empty($node->audit))
+        {
+            $this->unvalid_node($node->audit);
+        }
+
+        if (!empty($node->nc_folder))
+        {
+            $this->unvalid_node($node->nc_folder);
+        }
+
+        return $node;
+    }
+
+    protected function ask_permission_for($operation, $node)
+    {
+        $validator = UserController::find($node->validator_id);
+
+        $validator->notify(new AskPermission($node, $operation));
+    }
+
+
 
 }

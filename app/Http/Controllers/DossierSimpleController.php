@@ -216,27 +216,11 @@ class DossierSimpleController extends Controller
                 }
                 else
                 {
-                    try {
-                        $new_operation = operationNotification::create(
-                            [
-                                'operable_id' => $cache->id,
-                                'operable_type' => "App\Models\DossierSimple",
-                                'operation_type' => 'deletion',
-                                'from_id' => Auth::id(),
-                                'validator_id' => $target->validator_id
-                            ]
-                        );
-                    }
-                    catch (\Throwable $th) {
-                        return \response(ResponseTrait::get('error', 'en attente'), 500);
+                    $this->ask_permission_for('deletion', $target);
 
-                    }
-
-                    $new_operation->operable;
-                    $new_operation->front_type = 'ds';
-                    Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Dossier', $new_operation, Auth::user()));
                     DB::commit();
-                    return ResponseTrait::get('success', 'attente');
+
+                    return ResponseTrait::get('success', "Demande de permission");
                 }
 
             }
@@ -280,7 +264,7 @@ class DossierSimpleController extends Controller
         DB::beginTransaction();
 
         $goesWell = true;
-
+        $GLOBALS['to_broadcast'] = [];
 
         try
         {
@@ -303,9 +287,18 @@ class DossierSimpleController extends Controller
                         throw new Exception("Vous n'avez pas les droits nécessaires", -2);
                     }
 
-                    $folder->is_validated = $request->new_value;
-                    $folder->push();
-                    $folder->refresh();
+                    if ($request->new_value)
+                    {
+                        $folder = $this->valid_node($folder);
+
+                        $are_updated = $GLOBALS['to_broadcast'];
+                    }
+                    else
+                    {
+                        $folder = $this->unvalid_node($folder);
+
+                        $are_updated = $GLOBALS['to_broadcast'];
+                    }
 
                     break;
                 }
@@ -331,7 +324,13 @@ class DossierSimpleController extends Controller
 
             // $getId = function($element){ return $element->id.'-fnc'; }; array_map( $getId, $request )
 
-            NodeUpdateEvent::dispatch('ds', [$request->id.'-ds'], "update");
+            if (!empty($are_updated))
+            {
+                $getId = function($element){ return $element->id.'-ds'; };
+
+                NodeUpdateEvent::dispatch('ds', array_map( $getId, $are_updated ), "update");
+            }
+            else NodeUpdateEvent::dispatch('ds', [$request->id.'-ds'], "update");
 
             return ResponseTrait::get('success', $folder);
         }

@@ -9,7 +9,7 @@ use Laravel\Fortify\Features;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\NcController;
-use App\Notifications\RemovalResponse;
+use App\Notifications\InfoNotification;
 use App\Http\Controllers\NodeController;
 use App\Http\Controllers\AuditController;
 use Illuminate\Support\Facades\Broadcast;
@@ -149,6 +149,7 @@ Route::middleware('auth:sanctum')->group(
 
         // user
          Route::get('get_users', [UserController::class, 'get_users']);
+         Route::post('authorization_response', [UserController::class, 'handle_permission_response']);
 
 
 
@@ -349,13 +350,20 @@ Route::middleware('auth:sanctum')->group(
 
             $authUser->services;
             $authUser->operationNotifications;
-            foreach ($authUser->operationNotifications as $key => $value) {
-                # code...
-                $authUser->operationNotifications[$key]->operable;
-                $authUser->operationNotifications[$key]->from;
-                $authUser->operationNotifications[$key] = $format($authUser->operationNotifications[$key]);
-            }
-            $authUser->unreadNotifications;
+//            foreach ($authUser->operationNotifications as $key => $value) {
+//                # code...
+//                $authUser->operationNotifications[$key]->operable;
+//                $authUser->operationNotifications[$key]->from;
+//                $authUser->operationNotifications[$key] = $format($authUser->operationNotifications[$key]);
+//            }
+            $authUser->unread_review_notifications = $authUser->notifications()
+                ->unread()
+                ->where('type', 'App\Notifications\FncReviewNotification')
+                ->get();
+            $authUser->asking_permission_notifications = $authUser->notifications()
+                ->unread()
+                ->where('type', 'App\Notifications\AskPermission')
+                ->get();
             $authUser->readNotifications;
         }
 

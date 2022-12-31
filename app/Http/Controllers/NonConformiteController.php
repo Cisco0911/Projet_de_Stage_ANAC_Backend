@@ -33,7 +33,7 @@ class NonConformiteController extends Controller
         $fnc->section;
         $fnc->services;
         $fnc->path;
-        $fnc->nc;
+        $fnc->nc_folder;
         $fnc->dossiers;
         $fnc->fichiers;
         $fnc->operation;
@@ -147,7 +147,7 @@ class NonConformiteController extends Controller
 
                     $new_fnc->push();
 
-                    $path_value = $new_fnc->nc->path->value."\\".$new_fnc->name;
+                    $path_value = $new_fnc->nc_folder->path->value."\\".$new_fnc->name;
 
                     if (!Paths::where([ 'value' => $path_value ])->exists()) {
                         # code...
@@ -362,7 +362,7 @@ class NonConformiteController extends Controller
 
                     if ( !existing_reminder($request->id, $remain_ms) )
                     {
-                        $inspectors = $fnc->nc->audit->users;
+                        $inspectors = $fnc->nc_folder->audit->users;
 
                         foreach ( $inspectors as $inspector )
                         {

@@ -8,7 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 
-class RemovalResponse extends Notification
+class InfoNotification extends Notification
 {
 
     /**
@@ -19,17 +19,21 @@ class RemovalResponse extends Notification
 
 
     // public $node_type;
+    public $object;
     public $msg;
-    public $userFrom;
+    public $attachment;
+    public $user_from;
 
 
-    public function __construct($msg, $user)
+    public function __construct($object, $msg, $attachment, $user)
     {
         //
         // $this->afterCommit();
         // $this->node_type = $node_type;
+        $this->object = $object;
         $this->msg = $msg;
-        $this->userFrom = $user;
+        $this->attachment = $attachment;
+        $this->user_from = $user;
     }
 
     /**
@@ -47,22 +51,23 @@ class RemovalResponse extends Notification
      * Get the mail representation of the notification.
      *
      * @param  mixed  $notifiable
-     * @return \Illuminate\Notifications\Messages\MailMessage
+     * @return BroadcastMessage
      */
 
 
     public function toBroadcast($notifiable)
     {
         return new BroadcastMessage([
-            // 'node_type' => $this->node_type,
+            'object' => $this->object,
             'msg' => $this->msg,
-            'userFrom' => $this->userFrom,
+            'attachment' => $this->attachment,
+            'user_from' => "M. ".$this->user_from->name[0].".".$this->user_from->second_name,
         ]);
     }
 
     public function broadcastType()
     {
-        return 'NodeRemovalResponse';
+        return 'Information';
     }
 
     // public function toMail($notifiable)
@@ -80,12 +85,12 @@ class RemovalResponse extends Notification
      * @param  mixed  $notifiable
      * @return array
      */
-    public function toArray($notifiable)
-    {
-        return [
-            //
-        ];
-    }
+//    public function toArray($notifiable)
+//    {
+//        return [
+//            //
+//        ];
+//    }
 
     public function withDelay($notifiable)
     {

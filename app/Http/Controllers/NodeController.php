@@ -35,39 +35,64 @@ class NodeController extends Controller
     }
 
 
+    function find_job(array $jobs, $id)
+    {
+        foreach ($jobs as $job)
+        {
+            # code...
+            $job = \json_decode($job);
 
-    function find(array $jobs, $key, $isFnc = false)
+            if( $job->id == $id ) return $job;
+        }
+
+        return null;
+    }
+
+    function get_dependency_data(array $jobs, $key, $isFnc = false)
     {
         if (!is_int($key))
         {
-            foreach ($jobs as $job)
-            {
-                # code...
-                $job = \json_decode($job);
+            $job = $this->find_job($jobs, $key->job_id);
 
-                if( $job->id == $key->job_id )
-                {
-                    $res = $job->data->{$key->num};
+            $res = $job->data->{$key->num};
 
-                    $res->state = $job->etat;
+            $res->state = $job->etat;
 
-                    return $res;
-                }
-            }
+            return $res;
+
+//            foreach ($jobs as $job)
+//            {
+//                # code...
+//                $job = \json_decode($job);
+//
+//                if( $job->id == $key->job_id )
+//                {
+//                    $res = $job->data->{$key->num};
+//
+//                    $res->state = $job->etat;
+//
+//                    return $res;
+//                }
+//            }
         }
         else
         {
-            foreach ($jobs as $job)
-            {
-                # code...
-                $job = \json_decode($job);
+            $job = $this->find_job($jobs, $key);
 
-                if( $job->id == $key )
-                {
-                    $job->data->state = $job->etat;
-                    return $job->data;
-                }
-            }
+            $job->data->state = $job->etat;
+            return $job->data;
+
+//            foreach ($jobs as $job)
+//            {
+//                # code...
+//                $job = \json_decode($job);
+//
+//                if( $job->id == $key )
+//                {
+//                    $job->data->state = $job->etat;
+//                    return $job->data;
+//                }
+//            }
         }
     }
 
@@ -148,10 +173,11 @@ class NodeController extends Controller
                 case 'App\Models\checkList':
                     # code...
                     {
-                        $audit_job_data = $this->find($jobs, $job->dependencies[0]);
+                        $audit_job = $this->find_job($jobs, $job->dependencies[0]);
 
-                        $job->etat = $res["statue"];
-                        $job->data = $res["data"]->checkList;
+                        $job->etat = $audit_job->etat;
+
+                        if ($job->etat) $job->data = $audit_job->data->checklist;
 
                         $jobs[$key] = json_encode($job);
 
@@ -160,10 +186,11 @@ class NodeController extends Controller
                 case 'App\Models\DossierPreuve':
                     # code...
                     {
-                        $audit_job_data = $this->find($jobs, $job->dependencies[0]);
+                        $audit_job = $this->find_job($jobs, $job->dependencies[0]);
 
-                        $job->etat = $res["statue"];
-                        $job->data = $res["data"]->dossier_preuve;
+                        $job->etat = $audit_job->etat;
+
+                        if ($job->etat) $job->data = $audit_job->data->dossier_preuve;
 
                         $jobs[$key] = json_encode($job);
 
@@ -172,10 +199,11 @@ class NodeController extends Controller
                 case 'App\Models\Nc':
                     # code...
                     {
-                        $audit_job_data = $this->find($jobs, $job->dependencies[0]);
+                        $audit_job = $this->find_job($jobs, $job->dependencies[0]);
 
-                        $job->etat = $res["statue"];
-                        $job->data = $res["data"]->nc;
+                        $job->etat = $audit_job->etat;
+
+                        if ($job->etat) $job->data = $audit_job->data->nc;
 
                         $jobs[$key] = json_encode($job);
 
@@ -190,7 +218,7 @@ class NodeController extends Controller
                             {
                                 if( !empty($job->dependencies) )
                                 {
-                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
+                                    $dependency_data = $this->get_dependency_data($jobs, $job->dependencies[0]);
 
                                     if( $dependency_data->state == 'success' )
                                     {
@@ -241,7 +269,7 @@ class NodeController extends Controller
                             {
                                 if( !empty($job->dependencies) )
                                 {
-                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
+                                    $dependency_data = $this->get_dependency_data($jobs, $job->dependencies[0]);
 
                                     if( $dependency_data->state == 'success' )
                                     {
@@ -273,7 +301,7 @@ class NodeController extends Controller
                             {
                                 if( !empty($job->dependencies) )
                                 {
-                                    $fnc_data = $this->find($jobs, $job->dependencies[0]);
+                                    $fnc_data = $this->get_dependency_data($jobs, $job->dependencies[0]);
 
                                     if( $fnc_data->state == 'success' )
                                     {
@@ -334,7 +362,7 @@ class NodeController extends Controller
                             {
                                 if( !empty($job->dependencies) )
                                 {
-                                    $dependency_data = $this->find($jobs, (int)$job->dependencies[0]);
+                                    $dependency_data = $this->get_dependency_data($jobs, (int)$job->dependencies[0]);
 
                                     if( $dependency_data->state == 'success' )
                                     {
@@ -401,7 +429,7 @@ class NodeController extends Controller
 
                                 if( !empty($job->dependencies) )
                                 {
-                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
+                                    $dependency_data = $this->get_dependency_data($jobs, $job->dependencies[0]);
 
                                     if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
@@ -424,7 +452,7 @@ class NodeController extends Controller
                                 }
                                 if ( !empty($job->from_dependency) )
                                 {
-                                    $dependency_data = $this->find($jobs, $job->from_dependency[0]);
+                                    $dependency_data = $this->get_dependency_data($jobs, $job->from_dependency[0]);
 
                                     if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
@@ -501,7 +529,7 @@ class NodeController extends Controller
 
                                 if( !empty($job->dependencies) )
                                 {
-                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
+                                    $dependency_data = $this->get_dependency_data($jobs, $job->dependencies[0]);
 
                                     if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
@@ -523,7 +551,7 @@ class NodeController extends Controller
                                 }
                                 if ( !empty($job->from_dependency) )
                                 {
-                                    $dependency_data = $this->find($jobs, $job->from_dependency[0]);
+                                    $dependency_data = $this->get_dependency_data($jobs, $job->from_dependency[0]);
 
                                     if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
@@ -587,7 +615,7 @@ class NodeController extends Controller
                             {
                                 if( !empty($job->dependencies) )
                                 {
-                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
+                                    $dependency_data = $this->get_dependency_data($jobs, $job->dependencies[0]);
 
                                     if( $dependency_data->state == 'success' )
                                     {
@@ -654,7 +682,7 @@ class NodeController extends Controller
 
                                 if( !empty($job->dependencies) )
                                 {
-                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
+                                    $dependency_data = $this->get_dependency_data($jobs, $job->dependencies[0]);
 
                                     if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
@@ -677,7 +705,7 @@ class NodeController extends Controller
                                 }
                                 if ( !empty($job->from_dependency) )
                                 {
-                                    $dependency_data = $this->find($jobs, $job->from_dependency[0]);
+                                    $dependency_data = $this->get_dependency_data($jobs, $job->from_dependency[0]);
 
                                     if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
@@ -753,7 +781,7 @@ class NodeController extends Controller
 
                                 if( !empty($job->dependencies) )
                                 {
-                                    $dependency_data = $this->find($jobs, $job->dependencies[0]);
+                                    $dependency_data = $this->get_dependency_data($jobs, $job->dependencies[0]);
 
                                     if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
@@ -777,7 +805,7 @@ class NodeController extends Controller
                                 }
                                 if ( !empty($job->from_dependency) )
                                 {
-                                    $dependency_data = $this->find($jobs, $job->from_dependency[0]);
+                                    $dependency_data = $this->get_dependency_data($jobs, $job->from_dependency[0]);
 
                                     if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
