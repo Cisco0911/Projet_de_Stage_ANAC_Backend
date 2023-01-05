@@ -7,6 +7,7 @@ use App\Models\DossierPreuve;
 use App\Models\Nc;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +19,7 @@ class AskPermission extends Notification
     public $node_id;
     public $model;
     public $node_name;
+    private $node_path;
     public $operation;
     public $from_id;
     public $full_name;
@@ -36,6 +38,7 @@ class AskPermission extends Notification
         elseif ($node instanceof DossierPreuve) $this->node_name = "Dossier preuve de ".$node->audit->name;
         elseif ($node instanceof Nc) $this->node_name = "Dossier Nc de ".$node->audit->name;
         else $this->node_name = $node->name;
+        $this->node_path = $node->path->value;
 
         $this->operation = $operation;
 
@@ -53,7 +56,28 @@ class AskPermission extends Notification
     public function via($notifiable)
     {
 //        return ['mail'];
-        return ['database'];
+        return ['database', 'broadcast', 'mail'];
+    }
+
+    /**
+     * Get the mail representation of the notification.
+     *
+     * @param  mixed  $notifiable
+     * @return BroadcastMessage
+     */
+
+
+    public function toBroadcast($notifiable)
+    {
+        return new BroadcastMessage([
+            'from_id' => $this->from_id,
+            'name' => $this->full_name,
+        ]);
+    }
+
+    public function broadcastType()
+    {
+        return 'AskPermission';
     }
 
     /**
@@ -62,13 +86,17 @@ class AskPermission extends Notification
      * @param  mixed  $notifiable
      * @return \Illuminate\Notifications\Messages\MailMessage
      */
-//    public function toMail($notifiable)
-//    {
-//        return (new MailMessage)
-//                    ->line('The introduction to the notification.')
-//                    ->action('Notification Action', url('/'))
-//                    ->line('Thank you for using our application!');
-//    }
+    public function toMail($notifiable)
+    {
+        $action = $this->operation == "deletion" ? "supprimer" : "modifier";
+        return (new MailMessage)
+                    ->subject("Notification de demande de permission")
+                    ->greeting("Salution, Mr. $notifiable->name !!")
+                    ->line("L'inspecteur $this->full_name demande permission pour $action: $this->node_path")
+                    ->action("Accéder à l'application", env("FRONTEND_URL"))
+                    ->line("Cordialement,")
+                    ->salutation("GESTIONNAIRE DE FICHIER ANAC.");
+    }
 
     /**
      * Get the array representation of the notification.

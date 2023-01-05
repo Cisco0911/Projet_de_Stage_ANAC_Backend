@@ -28,7 +28,7 @@ class Nc extends Model
     {
         return $this->belongsTo(Audit::class);
     }
-    
+
     public function fncs()
     {
         return $this->hasMany(NonConformite::class);
@@ -64,7 +64,7 @@ class Nc extends Model
         parent::boot();
 
         static::deleting(function($nonC) { // before delete() method call this
-            
+
             foreach ($nonC->dossiers as $key => $child_folder) $child_folder->delete();
             foreach ($nonC->fichiers as $key => $child_file) $child_file->delete();
             foreach ($nonC->fncs as $key => $fnc) $fnc->delete();

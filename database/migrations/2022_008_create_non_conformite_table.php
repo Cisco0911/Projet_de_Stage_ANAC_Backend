@@ -21,6 +21,11 @@ return new class extends Migration
             $table->boolean('isClosed')->default(false);
             $table->foreignId('nc_id')->constrained();
             $table->foreignId('section_id')->constrained();
+            $table->boolean('is_validated');
+            $table->foreign('validator_id')
+                ->references('id')->on('users')
+                ->onUpdate('restrict')
+                ->onDelete('restrict');
             $table->timestamps();
         });
     }

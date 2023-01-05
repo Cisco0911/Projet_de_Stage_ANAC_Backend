@@ -64,7 +64,7 @@ class FncReviewNotification extends Notification
      */
     public function via($notifiable)
     {
-        return ['broadcast', 'database'];
+        return ['broadcast', 'database', 'mail'];
     }
 
     /**
@@ -103,13 +103,16 @@ class FncReviewNotification extends Notification
     }
 
 
-//    public function toMail($notifiable)
-//    {
-//        return (new MailMessage)
-//                    ->line('The introduction to the notification.')
-//                    ->action('Notification Action', url('/'))
-//                    ->line('Thank you for using our application!');
-//    }
+    public function toMail($notifiable)
+    {
+        return (new MailMessage)
+            ->subject($this->object)
+            ->greeting("Salution, Mr. $notifiable->name !!")
+            ->line($this->msg)
+            ->action("Accéder à l'application", env("FRONTEND_URL"))
+            ->line("Cordialement,")
+            ->salutation("GESTIONNAIRE DE FICHIER ANAC.");
+    }
 
     /**
      * Get the array representation of the notification.

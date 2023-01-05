@@ -65,16 +65,19 @@ class DossierSimpleController extends Controller
 
     public function get_ds()
     {
-       $ds = DossierSimple::all();
+        $ds = DossierSimple::all();
 
-       foreach ($ds as $key => $dossier) {
-        # code...
+        foreach ($ds as $key => $dossier) {
+            # code...
 
-        $ds[$key] = $this->format($dossier);
+//            $var = $this->demand_exist('deletion', $dossier);
+//
+//            $dossier->is_suppressing = isset($var);
+            $ds[$key] = $this->format($dossier);
 
-       }
+        }
 
-       return $ds;
+        return $ds;
     }
 
     public static function find(int $id)
@@ -96,8 +99,6 @@ class DossierSimpleController extends Controller
 
         DB::beginTransaction();
 
-        $saved = true;
-
         try {
             //code...
 
@@ -109,12 +110,23 @@ class DossierSimpleController extends Controller
                 'services' => ['required', 'string'],
             ]);
 
-            $new_folder = DossierSimple::create(
+            $parent = $this->find_node($request->parent_id, $request->parent_type);
+
+            if (empty($parent))
+            {
+                throw new Exception("Parent inexistant.", -4);
+            }
+
+            $feasible = $this->can_modify_node($parent);
+
+            if( $feasible != 2 ) throw new Exception("Vous n'avez pas les droits nécessaires\nSi le parent est validé, veuillez faire une demande d'autorisation de modification", -3);
+
+            $new_folder = $parent->dossiers()->create(
                 [
                     'section_id' => $request->section_id,
                     'name' => $request->name,
-                    'parent_id' => $request->parent_id,
-                    'parent_type' => $request->parent_type,
+                    'is_validated' => $parent->is_validated ?? 0,
+                    'validator_id' => $parent->validator_id,
                 ]
             );
 
@@ -152,34 +164,20 @@ class DossierSimpleController extends Controller
         }
         catch (\Throwable $th)
         {
-            //throw $th;
-            $saved = false;
-
-            $error_object = new \stdClass();
-
-            $error_object->line = $th->getLine();
-            $error_object->msg = $th->getMessage();
-            $error_object->code = $th->getCode();
+            DB::rollBack();
+            return ResponseTrait::get_error($th) ;
         }
 
-        if($saved)
+
+        DB::commit(); // YES --> finalize it
+        try
         {
-            DB::commit(); // YES --> finalize it
-            try
-            {
-                NodeUpdateEvent::dispatch('ds', [$new_folder->id.'-ds'], "add");
-            }
-            catch (\Throwable $e)
-            {}
-
-            return ResponseTrait::get('success', $new_folder);
+            NodeUpdateEvent::dispatch('ds', [$new_folder->id.'-ds'], "add");
         }
-        else
-        {
-            DB::rollBack(); // NO --> some error has occurred undo the whole thing
+        catch (\Throwable $e)
+        {}
 
-            return ResponseTrait::get('error', $error_object) ;
-        }
+        return ResponseTrait::get_success($new_folder);
 
         // DB::endTransaction();
 
@@ -220,7 +218,7 @@ class DossierSimpleController extends Controller
 
                     DB::commit();
 
-                    return ResponseTrait::get('success', "Demande de permission");
+                    return ResponseTrait::get_info("Demande de permission envoyé");
                 }
 
             }
@@ -253,7 +251,7 @@ class DossierSimpleController extends Controller
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return \response(ResponseTrait::get('error', $th2->getMessage()), 500);
+            return ResponseTrait::get('error', $th2->getMessage());
         }
 
     }
@@ -284,7 +282,31 @@ class DossierSimpleController extends Controller
 
                     if ( !$this->can_modify_valid_state($folder) )
                     {
-                        throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+                        if ($folder->is_validated)
+                        {
+                            if ($this->can_modify_node($folder))
+                            {
+                                if ( $this->ask_permission_for('modification', $folder) )
+                                {
+                                    $GLOBALS['to_broadcast'] = [];
+
+                                    DB::commit();
+
+                                    return ResponseTrait::get_info("Demande de permission envoyé");
+                                }
+                                else
+                                {
+                                    $GLOBALS['to_broadcast'] = [];
+
+                                    DB::rollBack();
+
+                                    throw new Exception("Demande existant");
+                                }
+
+                            }
+                            else throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+                        }
+                        else throw new Exception("Vous n'avez pas les droits nécessaires", -2);
                     }
 
                     if ($request->new_value)
@@ -303,43 +325,39 @@ class DossierSimpleController extends Controller
                     break;
                 }
                 default:
+                    DB::rollBack();
+
+                    $GLOBALS['to_broadcast'] = [];
+
                     return ResponseTrait::get('success', 'Nothing was done');
             }
 
         }
-        catch (\Throwable $th) {
-            //throw $th;
-            $goesWell = false;
-
-            $error_object = new \stdClass();
-
-            $error_object->line = $th->getLine();
-            $error_object->msg = $th->getMessage();
-            $error_object->code = $th->getCode();
-        }
-
-        if($goesWell)
-        {
-            DB::commit(); // YES --> finalize it
-
-            // $getId = function($element){ return $element->id.'-fnc'; }; array_map( $getId, $request )
-
-            if (!empty($are_updated))
-            {
-                $getId = function($element){ return $element->id.'-ds'; };
-
-                NodeUpdateEvent::dispatch('ds', array_map( $getId, $are_updated ), "update");
-            }
-            else NodeUpdateEvent::dispatch('ds', [$request->id.'-ds'], "update");
-
-            return ResponseTrait::get('success', $folder);
-        }
-        else
+        catch (\Throwable $th)
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return \response(ResponseTrait::get('error', $error_object), 500);
+            $GLOBALS['to_broadcast'] = [];
+
+            return ResponseTrait::get_error($th);
         }
+
+
+        DB::commit(); // YES --> finalize it
+
+        // $getId = function($element){ return $element->id.'-fnc'; }; array_map( $getId, $request )
+
+        if (!empty($are_updated))
+        {
+            $getId = function($element){ return $this->get_broadcast_id($element); };
+
+            NodeUpdateEvent::dispatch('ds', array_map( $getId, $are_updated ), "update");
+        }
+        else NodeUpdateEvent::dispatch('ds', [$this->get_broadcast_id($folder)], "update");
+
+        $GLOBALS['to_broadcast'] = [];
+
+        return ResponseTrait::get('success', $folder);
 
     }
 
@@ -410,23 +428,26 @@ class DossierSimpleController extends Controller
 
                 $existant_folder->refresh();
                 $dossier->refresh();
-                array_push($GLOBALS['to_delete'], $dossier);
+//                    array_push($GLOBALS['to_delete'], $dossier);
             }
             else
             {
                 $dossier->parent_id = $new_folder->id;
                 $dossier->parent_type = 'App\Models\DossierSimple';
+                $dossier->is_validated = $new_folder->is_validated;
+                $dossier->validator_id = $new_folder->validator_id;
 
                 $dossier->push();
 
                 $this->update_path($dossier);
 
                 $dossier->refresh();
-                array_push($GLOBALS['to_broadcast'], $dossier);
+//                    array_push($GLOBALS['to_broadcast'], $dossier);
             }
         }
         foreach ($old_folder->fichiers as $fichier)
         {
+
             if ( Paths::where([ 'value' => $new_folder->path->value.'\\'.$fichier->name ])->exists() )
             {
                 $path = Paths::where([ 'value' => $new_folder->path->value.'\\'.$fichier->name ])->first();
@@ -445,13 +466,15 @@ class DossierSimpleController extends Controller
 
             $fichier->parent_id = $new_folder->id;
             $fichier->parent_type = 'App\Models\DossierSimple';
+            $fichier->is_validated = $new_folder->is_validated;
+            $fichier->validator_id = $new_folder->validator_id;
 
             $fichier->push();
 
             $file_controller->update_path($fichier);
 
             $fichier->refresh();
-            array_push($GLOBALS['to_broadcast'], $fichier);
+//                array_push($GLOBALS['to_broadcast'], $fichier);
         }
     }
 
@@ -472,10 +495,22 @@ class DossierSimpleController extends Controller
                 'id' => ['required', 'integer'],
             ]);
 
+            $new_parent = $this->find_node($request->destination_id, $request->destination_type);
+
             $old_folder = DossierSimple::find($request->id);
+
+            if (empty($new_parent))
+            {
+                throw new Exception("Parent inexistant.", -4);
+            }
+
+            $feasible = $this->can_modify_node($new_parent);
+
+            if( ($feasible != 2) || !$this->can_modify_node_deep_check($old_folder) ) throw new Exception("Vous n'avez pas les droits nécessaires ou le dossier contient un élément validé\nSi le parent ou le dossier est validé, veuillez faire une demande d'autorisation de modification", -3);
+
             $from = json_decode( json_encode( storage_path().'\app\public\\'.$old_folder->path->value ) );
 
-            $destination = $this->find_node($request->destination_id, $request->destination_type);
+            $destination = $new_parent;
 
             if (strpos($destination->path->value, $old_folder->path->value) !== false) throw new Exception('Le dossier de destination est un sous-dossier du dossier source.', -1);
 
@@ -511,6 +546,8 @@ class DossierSimpleController extends Controller
 
                         $old_folder->parent_id = $request->destination_id;
                         $old_folder->parent_type = $request->destination_type;
+                        $old_folder->is_validated = $destination->is_validated ?? 0;
+                        $old_folder->validator_id = $destination->validator_id;
                         $old_folder->name = $new_name;
 
                         $old_folder->push();
@@ -532,46 +569,32 @@ class DossierSimpleController extends Controller
                     }
                     case 3:
                     {
-                        $new_folder = DossierSimple::where(
+                        $new_folder = $destination->dossiers()->where(
                             [
                                 'name' => $old_folder->name,
-                                'parent_id' => (int)$request->destination_id,
-                                'parent_type' => $request->destination_type,
                             ]
                         )->first();
 
-//                        foreach ($new_folder->dossiers as $dossier)
-//                        {
-//                            $dossier->delete();
-//                        }
-//                        foreach ($new_folder->fichiers as $fichier)
-//                        {
-//                            $fichier->delete();
-//                        }
-//                        Storage::deleteDirectory('public\\'.$destination->path->value.'\\'.$old_folder->name);
+                        if (!$this->can_modify_node_deep_check($new_folder)) throw new Exception("Le dossier à la destination est soit validé ou contient un élément validé");
 
-                        $this->attach_children($old_folder, $new_folder);
+                        if ( $this->can_modify_node($new_folder) == 2 )
+                        {
+                            $this->attach_children($old_folder, $new_folder);
 
-                        $new_folder->refresh();
-//                        $new_folder->dossiers;
-//                        $new_folder->fichiers;
+                            $new_folder->refresh();
 
-                        $to = json_decode( json_encode( storage_path().'\app\public\\'.$new_folder->path->value ) );
+                            $to = json_decode( json_encode( storage_path().'\app\public\\'.$new_folder->path->value ) );
 
-                        File::copyDirectory(
-                            $from,
-                            $to,
-                        );
+                            File::copyDirectory(
+                                $from,
+                                $to,
+                            );
+                        }
+
                         File::deleteDirectory($from);
-//                        $res = [$from, $to];
+
                         $old_folder->refresh();
-//                        $this->del_folder(
-//                            new Request(
-//                                [
-//                                    'id' => $old_folder->id,
-//                                ]
-//                            )
-//                        );
+
                         array_push($GLOBALS['to_delete'], $old_folder);
 
                         break;
@@ -583,10 +606,12 @@ class DossierSimpleController extends Controller
             {
                 $old_folder->parent_id = $request->destination_id;
                 $old_folder->parent_type = $request->destination_type;
+                $old_folder->is_validated = $destination->is_validated ?? 0;
+                $old_folder->validator_id = $destination->validator_id;
 
                 $old_folder->push();
-
                 $old_folder->refresh();
+
                 $new_folder = $old_folder;
 
                 $to = json_decode( json_encode( storage_path().'\app\public\\'. $this->update_path($new_folder)) );
@@ -606,62 +631,44 @@ class DossierSimpleController extends Controller
         catch (\Throwable $th)
         {
             $GLOBALS['to_broadcast'] = [];
+            $GLOBALS['to_delete'] = [];
 
             DB::rollBack();
 
-            $error_object = new \stdClass();
-
-            $error_object->line = $th->getLine();
-            $error_object->msg = $th->getMessage();
-            $error_object->code = $th->getCode();
-
-            return ResponseTrait::get('error', $error_object);
+            return ResponseTrait::get_error($th);
         }
 
 
-
-        if($goes_well)
+        DB::commit(); // YES --> finalize it
+        foreach ($GLOBALS['to_delete'] as $element)
         {
-            DB::commit(); // YES --> finalize it
-            foreach ($GLOBALS['to_delete'] as $element)
-            {
-                $this->del_folder(
-                    new Request(
-                        [
-                            'id' => $element->id,
-                        ]
-                    )
-                );
-            };
-            $GLOBALS['to_delete'] = [];
-            try
-            {
-                $getId = function($element)
-                {
-                    if ($element instanceof DossierSimple) return $element->id.'-ds';
-                    elseif ($element instanceof Fichier) return $element->id.'-f';
-                };
-
-                if (count($GLOBALS['to_broadcast']) > 0) NodeUpdateEvent::dispatch('ds', array_map( $getId, $GLOBALS['to_broadcast'] ), 'update');
-            }
-            catch (\Throwable $e)
-            {}
-
-            $GLOBALS['to_broadcast'] = [];
-            return ResponseTrait::get('success', $new_folder);
-        }
-        else
+            $this->del_folder(
+                new Request(
+                    [
+                        'id' => $element->id,
+                    ]
+                )
+            );
+        };
+        $GLOBALS['to_delete'] = [];
+        try
         {
-            DB::rollBack(); // NO --> some error has occurred undo the whole thing
+            $getId = function($element) { return $this->get_broadcast_id($element); };
 
-            $GLOBALS['to_broadcast'] = [];
-            return ResponseTrait::get('error', [$goes_well, $from, $to]);
+            if (count($GLOBALS['to_broadcast']) > 0) NodeUpdateEvent::dispatch('ds', array_map( $getId, $GLOBALS['to_broadcast'] ), 'update');
         }
+        catch (\Throwable $e)
+        {}
+
+        $GLOBALS['to_broadcast'] = [];
+        return ResponseTrait::get_success($new_folder);
 
     }
 
     protected function create_children($old_folder, $new_folder)
     {
+        $file_controller = new FichierController();
+
         foreach ( $old_folder->dossiers as $dossier )
         {
 
@@ -669,11 +676,17 @@ class DossierSimpleController extends Controller
             {
                 $nv_dossier = Paths::where( [ 'value' => $new_folder->path->value.'\\'.$dossier->name ] )->first()->routable;
 
+//                $nv_dossier->is_validated = $new_folder->is_validated;
+//                $nv_dossier->validator_id = $new_folder->validator_id;
+
                 $nv_dossier->services()->detach();
                 foreach ($new_folder->services as $service)
                 {
                     $nv_dossier->services()->attach($service->id);
                 }
+
+                $nv_dossier->push();
+                $nv_dossier->refresh();
             }
             else
             {
@@ -681,6 +694,8 @@ class DossierSimpleController extends Controller
                     [
                         'name' => $dossier->name,
                         'section_id' => $new_folder->section_id,
+                        'is_validated' => $new_folder->is_validated,
+                        'validator_id' => $new_folder->validator_id,
                     ]
                 );
 
@@ -704,43 +719,47 @@ class DossierSimpleController extends Controller
         }
         foreach ( $old_folder->fichiers as $fichier )
         {
-            if ( !Paths::where( [ 'value' => $new_folder->path->value.'\\'.$fichier->name ] )->exists() )
+
+            if ( Paths::where( [ 'value' => $new_folder->path->value.'\\'.$fichier->name ] )->exists() )
             {
-                $new_file = new Fichier(
-                    [
-                        'name' => $fichier->name,
-                        'section_id' => $new_folder->section_id,
-                        'size' => $fichier->size,
-                        'extension' => $fichier->extension,
-                    ]
-                );
+                $existing_file = Paths::where( [ 'value' => $new_folder->path->value.'\\'.$fichier->name ] )->first()->routable;
 
-                $new_folder->fichiers()->save($new_file);
-                $new_folder->refresh();
-
-                $new_file->path()->create(
-                    [
-                        'value' => $new_folder->path->value.'\\'.$new_file->name
-                    ]
+                $file_controller->del_file(
+                    new Request(
+                        [
+                            'id' => $existing_file->id,
+                        ]
+                    )
                 );
-                foreach ($new_folder->services as $service)
-                {
-                    $new_file->services()->attach($service->id);
-                }
+            }
+
+            $new_file = new Fichier(
+                [
+                    'name' => $fichier->name,
+                    'section_id' => $new_folder->section_id,
+                    'size' => $fichier->size,
+                    'extension' => $fichier->extension,
+                    'is_validated' => $new_folder->is_validated,
+                    'validator_id' => $new_folder->validator_id,
+                ]
+            );
+
+            $new_folder->fichiers()->save($new_file);
+            $new_folder->refresh();
+
+            $new_file->path()->create(
+                [
+                    'value' => $new_folder->path->value.'\\'.$new_file->name
+                ]
+            );
+            foreach ($new_folder->services as $service)
+            {
+                $new_file->services()->attach($service->id);
+            }
 
 //                $new_file->path;
-                array_push($GLOBALS['to_broadcast'], $new_file);
-            }
-            else
-            {
-                $new_file = Paths::where( [ 'value' => $new_folder->path->value.'\\'.$fichier->name ] )->first()->routable;
+            array_push($GLOBALS['to_broadcast'], $new_file);
 
-                $new_file->services()->detach();
-                foreach ($new_folder->services as $service)
-                {
-                    $new_file->services()->attach($service->id);
-                }
-            }
         }
     }
 
@@ -766,12 +785,23 @@ class DossierSimpleController extends Controller
                 'id' => ['required', 'integer'],
             ]);
 
+            $new_parent = $this->find_node($request->destination_id, $request->destination_type);
+
+            if (empty($new_parent))
+            {
+                throw new Exception("Parent inexistant.", -4);
+            }
+
+            $feasible = $this->can_modify_node($new_parent);
+
+            if( $feasible != 2 ) throw new Exception("Vous n'avez pas les droits nécessaires\nSi le parent est validé, veuillez faire une demande d'autorisation de modification", -3);
+
 //            throw new Exception('lalala');
 
             $old_folder = DossierSimple::find($request->id);
             $from = json_decode( json_encode( storage_path().'\app\public\\'.$old_folder->path->value ) );
 
-            $destination = $this->find_node($request->destination_id, $request->destination_type);
+            $destination = $new_parent;
 
             if (strpos($destination->path->value, $old_folder->path->value) !== false) throw new Exception('Le dossier de destination est un sous-dossier du dossier source.', -1);
 
@@ -781,13 +811,11 @@ class DossierSimpleController extends Controller
                 {
                     case 1:
                     {
-                        $new_folder = DossierSimple::where(
+                        $new_folder = $destination->dossiers()->where(
                             [
                                 'name' => $old_folder->name,
-                                'parent_id' => (int)$request->destination_id,
-                                'parent_type' => $request->destination_type,
                             ]
-                        )->get()[0];
+                        )->first();
                         break;
                     }
                     case 2:
@@ -811,6 +839,8 @@ class DossierSimpleController extends Controller
                             [
                                 'name' => $new_name,
                                 'section_id' => $destination->section_id ?? $destination->id,
+                                'is_validated' => $destination->is_validated ?? 0,
+                                'validator_id' => $destination->validator_id,
                             ]
                         );
 
@@ -850,29 +880,18 @@ class DossierSimpleController extends Controller
                     }
                     case 3:
                     {
-                        $new_folder = DossierSimple::where(
+                        $new_folder = $destination->dossiers()->where(
                             [
                                 'name' => $old_folder->name,
-                                'parent_id' => (int)$request->destination_id,
-                                'parent_type' => $request->destination_type,
                             ]
                         )->first();
 
-//                        foreach ($new_folder->dossiers as $dossier)
-//                        {
-//                            $dossier->delete();
-//                        }
-//                        foreach ($new_folder->fichiers as $fichier)
-//                        {
-//                            $fichier->delete();
-//                        }
-//                        Storage::deleteDirectory('public\\'.$destination->path->value.'\\'.$old_folder->name);
+                        if (!$this->can_modify_node_deep_check($new_folder)) throw new Exception("Le dossier à la destination est soit validé ou contient un élément validé");
+
 
                         $this->create_children($old_folder, $new_folder);
 
                         $new_folder->refresh();
-//                        $new_folder->dossiers;
-//                        $new_folder->fichiers;
 
                         $to = json_decode( json_encode( storage_path().'\app\public\\'.$new_folder->path->value ) );
 
@@ -892,6 +911,8 @@ class DossierSimpleController extends Controller
                     [
                         'name' => $old_folder->name,
                         'section_id' => $destination->section_id ?? $destination->id,
+                        'is_validated' => $destination->is_validated ?? 0,
+                        'validator_id' => $destination->validator_id,
                     ]
                 );
 
@@ -932,47 +953,23 @@ class DossierSimpleController extends Controller
         }
         catch (\Throwable $th)
         {
-            $GLOBALS['to_broadcast'] = [];
-
-            DB::rollBack();
-
-            $error_object = new \stdClass();
-
-            $error_object->line = $th->getLine();
-            $error_object->msg = $th->getMessage();
-            $error_object->code = $th->getCode();
-
-            return ResponseTrait::get('error', $error_object);
+            return ResponseTrait::get_error($th);
         }
 
 
 
-        if($goes_well)
+        DB::commit(); // YES --> finalize it
+        try
         {
-            DB::commit(); // YES --> finalize it
-            try
-            {
-                $getId = function($element)
-                {
-                    if ($element instanceof DossierSimple) return $element->id.'-ds';
-                    elseif ($element instanceof Fichier) return $element->id.'-f';
-                };
+            $getId = function($element) { return $this->get_broadcast_id($element); };
 
-                if (count($GLOBALS['to_broadcast']) > 0) NodeUpdateEvent::dispatch('ds', array_map( $getId, $GLOBALS['to_broadcast'] ), 'add');
-            }
-            catch (\Throwable $e)
-            {}
-
-            $GLOBALS['to_broadcast'] = [];
-            return ResponseTrait::get('success', $new_folder);
+            if (count($GLOBALS['to_broadcast']) > 0) NodeUpdateEvent::dispatch('ds', array_map( $getId, $GLOBALS['to_broadcast'] ), 'add');
         }
-        else
-        {
-            DB::rollBack(); // NO --> some error has occurred undo the whole thing
+        catch (\Throwable $e)
+        {}
 
-            $GLOBALS['to_broadcast'] = [];
-            return ResponseTrait::get('error', $goes_well);
-        }
+        $GLOBALS['to_broadcast'] = [];
+        return ResponseTrait::get_success($new_folder);
 
     }
 

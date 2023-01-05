@@ -22,15 +22,17 @@ class NonConformite extends Model
     protected $fillable = [
         'name',
         'level',
-        'nc_id',
-        'section_id'
+//        'nc_id',
+        'section_id',
+        'is_validated',
+        'validator_id',
     ];
 
 
 
     public function nc_folder()
     {
-        return $this->belongsTo(Nc::class);
+        return $this->belongsTo(Nc::class, 'nc_id');
     }
 
     public function services()

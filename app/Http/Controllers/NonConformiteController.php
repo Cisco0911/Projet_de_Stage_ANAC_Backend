@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Traits\NodeTrait;
 use App\Models\Nc;
 use App\Models\User;
 use App\Models\Paths;
 use App\Notifications\FncReviewNotification;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Http\Request;
 use App\Models\NonConformite;
 use App\Events\NodeUpdateEvent;
@@ -26,6 +28,7 @@ class NonConformiteController extends Controller
     //
     use ServiableTrait;
     use ResponseTrait;
+    use NodeTrait;
 
     public static function find(int $id)
     {
@@ -97,7 +100,6 @@ class NonConformiteController extends Controller
 
         DB::beginTransaction();
 
-        $saved = true;
         $existing_fnc = [];
         $new_fncs = [];
 
@@ -111,10 +113,21 @@ class NonConformiteController extends Controller
                 'level' => ['required', 'integer'],
             ]);
 
+            $parent = $this->find_node($request->nonC_id, "App\Models\Nc");
+
+            if (empty($parent))
+            {
+                throw new Exception("Parent inexistant.", -4);
+            }
+
+            $feasible = $this->can_modify_node($parent);
+
+            if( $feasible != 2 ) throw new Exception("Vous n'avez pas les droits nécessaires\nSi le parent est validé, veuillez faire une demande d'autorisation de modification", -3);
+
 //            return $request->nonC_id;
 //            $date = new Date();
 
-            $audit = Nc::find($request->nonC_id)->audit;
+            $audit = $parent->audit;
 
             $start = $request->debut;
             $end = $request->fin;
@@ -135,27 +148,28 @@ class NonConformiteController extends Controller
                 # code...
                 if (!$isException($exceptions, $i))
                 {
-                    $new_fnc = new NonConformite(
+                    $new_fnc = $parent->fncs()->create(
                         [
                             'name' => 'FNC-'.$audit->name."-$i",
                             'level' => $request->level,
-                            'nc_id' => $request->nonC_id,
                             'section_id' => $audit->section->id,
+                            'is_validated' => $parent->is_validated,
+                            'validator_id' => $parent->validator_id,
 
                         ]
                     );
 
-                    $new_fnc->push();
+//                    $new_fnc->push();
+//                    DB::rollBack();
+//                    return NonConformite::find(65)->nc_folder;
 
                     $path_value = $new_fnc->nc_folder->path->value."\\".$new_fnc->name;
 
                     if (!Paths::where([ 'value' => $path_value ])->exists()) {
                         # code...
-                        $path = Paths::create(
+                        $path = $new_fnc->path()->create(
                             [
                                 'value' => $path_value,
-                                'routable_id' => $new_fnc->id,
-                                'routable_type' => 'App\Models\NonConformite'
                             ]
                         );
                         if (Storage::makeDirectory("public\\".$path_value)) {
@@ -185,44 +199,29 @@ class NonConformiteController extends Controller
         }
         catch (\Throwable $th)
         {
-            $saved = false;
-
-            $error_object = new \stdClass();
-
-            $error_object->line = $th->getLine();
-            $error_object->msg = $th->getMessage();
-            $error_object->code = $th->getCode();
-        }
-
-        if($saved)
-        {
-            DB::commit(); // YES --> finalize it
-
-            $getId = function($element){ return $element->id.'-fnc'; };
-
-            $fnc_list = [];
-            foreach ($new_fncs as $fnc)
-            {
-                if ( !array_search($fnc->name, $existing_fnc) ) array_push($fnc_list, $fnc);
-            }
-
-            NodeUpdateEvent::dispatch('fnc', array_map( $getId, $fnc_list ), 'add');
-
-            if (!empty($existing_fnc)) $new_fncs['existing_fnc'] = $existing_fnc;
-
-            return ResponseTrait::get('success', $new_fncs);
-        }
-        else
-        {
             foreach ($new_fncs as $key => $new_fnc) {
                 # code...
                 Storage::deleteDirectory("public\\".$new_fnc->path);
-            }
-
-            DB::rollBack(); // NO --> some error has occurred undo the whole thing
-
-            return  ResponseTrait::get('error', $error_object);
+            };
+            DB::rollBack();
+            return ResponseTrait::get_error($th);
         }
+
+        DB::commit(); // YES --> finalize it
+
+        $getId = function($element){ return $element->id.'-fnc'; };
+
+        $fnc_list = [];
+        foreach ($new_fncs as $fnc)
+        {
+            if ( !array_search($fnc->name, $existing_fnc) ) array_push($fnc_list, $fnc);
+        }
+
+        NodeUpdateEvent::dispatch('fnc', array_map( $getId, $fnc_list ), 'add');
+
+        if (!empty($existing_fnc)) $new_fncs['existing_fnc'] = $existing_fnc;
+
+        return ResponseTrait::get('success', $new_fncs);
 
 
     }
@@ -235,49 +234,41 @@ class NonConformiteController extends Controller
         $goesWell = true;
 
 
-        try
-        {
+        try {
 
             $target = NonConformite::find($request->id);
 
             $cache = $this->format($target);
 
-            if(Auth::user()->validator_id == null)
+            $feasible = $this->can_modify_node($target);
+
+            if($feasible)
             {
+                if ($feasible == 2)
+                {
+                    // dd($request);
 
-                // dd($request);
+                    $pathInStorage = "public\\".$target->path->value;
 
-                $pathInStorage = "public\\".$target->path->value;
+                    $target->delete();
+                }
+                else
+                {
+                    $this->ask_permission_for('deletion', $target);
 
-                $target->delete();
+                    DB::commit();
+
+                    return ResponseTrait::get_info("Demande de permission");
+                }
             }
             else
             {
-                try {
-                    $new_operation = operationNotification::create(
-                        [
-                            'operable_id' => $cache->id,
-                            'operable_type' => "App\Models\NonConformite",
-                            'operation_type' => 'deletion',
-                            'from_id' => Auth::user()->id,
-                            'validator_id' => Auth::user()->validator_id
-                        ]
-                    );
-                }
-                catch (\Throwable $th) {
-                    return \response(ResponseTrait::get('error', 'en attente'), 500);
-
-                }
-
-                $new_operation->operable;
-                $new_operation->front_type = 'fnc';
-                Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Non-Conformite', $new_operation, Auth::user()));
-                DB::commit();
-                return ResponseTrait::get('success', 'attente');
+                throw new Exception("Vous n'avez pas les droits nécessaires");
             }
 
         }
-        catch (\Throwable $th) {
+        catch (\Throwable $th)
+        {
             //throw $th;
             $goesWell = false;
         }
@@ -303,12 +294,95 @@ class NonConformiteController extends Controller
 
     }
 
+    protected function existing_reminder($fncId, $new_remain_time): bool
+    {
+        $review_reminders = ScheduledNotification::findByMeta("fncId", $fncId);
+
+        $res = false;
+
+        $already = [];
+
+        foreach ($review_reminders as $review_reminder)
+        {
+            if ($review_reminder->isSent()) continue;
+
+            if ($review_reminder->getNotification()->isAnticipated())
+            {
+                $review_reminder->reschedule(
+                    Carbon::now()->addRealMilliseconds((int)$new_remain_time)->subRealMinute()
+                );
+
+                array_push($already, -$review_reminder->getTargetId());
+
+                continue;
+            }
+
+            $review_reminder->reschedule(
+                Carbon::now()->addRealMilliseconds((int)$new_remain_time)
+            );
+
+            array_push($already, $review_reminder->getTargetId());
+
+            $res = true;
+        }
+
+        foreach ($review_reminders as $review_reminder)
+        {
+//            if ((int)$review_reminder->getNotification()->getFncId() == (int)$fncId)
+//            {
+//                if ($review_reminder->getNotification()->isAnticipated())
+//                {
+//                    $review_reminder->reschedule(
+//                        Carbon::now()->addRealMilliseconds((int)$new_remain_time)->subRealMinute()
+//                    );
+//                    continue;
+//                }
+//                $review_reminder->reschedule(
+//                    Carbon::now()->addRealMilliseconds((int)$new_remain_time)
+//                );
+//
+//                $res = true;
+//            }
+            if (!$review_reminder->isSent()) continue;
+
+            if ( $review_reminder->getNotification()->isAnticipated() && !in_array(-$review_reminder->getTargetId(), $already) )
+            {
+                $review_reminder->reschedule(
+                    Carbon::now()->addRealMilliseconds((int)$new_remain_time)->subRealMinute(),
+                    true
+                );
+
+                array_push($already, -$review_reminder->getTargetId());
+
+                continue;
+            }
+
+            if ( !in_array($review_reminder->getTargetId(), $already) )
+            {
+
+                $review_reminder->reschedule(
+                    Carbon::now()->addRealMilliseconds((int)$new_remain_time),
+                    true
+                );
+
+                array_push($already, $review_reminder->getTargetId());
+
+            }
+
+            $res = true;
+        }
+
+        return $res;
+    }
+
     function update_fnc( Request $request )
     {
 
         DB::beginTransaction();
 
         $goesWell = true;
+
+        $GLOBALS['to_broadcast'] = [];
 
 
         try
@@ -320,47 +394,26 @@ class NonConformiteController extends Controller
                 'new_value' => ['required'],
             ]);
 
+            $fnc = NonConformite::find($request->id);
+
+            if (empty($fnc)) throw new Exception("Fnc inexistant !!");
+
             switch ($request->update_object)
             {
                 case 'level':
-                    NonConformite::where('id', $request->id)->update(['level' => $request->new_value]);
+                    $fnc->level = $request->new_value;
+                    $fnc->push();
+                    $fnc->refresh();
                     break;
                 case 'review_date':
                 {
-                    function existing_reminder($fncId, $new_remain_time): bool
-                    {
-                        $review_reminders = ScheduledNotification::findByType('App\Notifications\FncReviewNotification');
-
-                        $res = false;
-
-                        foreach ($review_reminders as $review_reminder)
-                        {
-                            if ((int)$review_reminder->getNotification()->getFncId() == (int)$fncId)
-                            {
-                                if ($review_reminder->getNotification()->isAnticipated())
-                                {
-                                    $review_reminder->reschedule(
-                                        Carbon::now()->addRealMilliseconds((int)$new_remain_time)->subRealMinute()
-                                    );
-                                    continue;
-                                }
-                                $review_reminder->reschedule(
-                                    Carbon::now()->addRealMilliseconds((int)$new_remain_time)
-                                );
-
-                                $res = true;
-                            }
-                        }
-
-                        return $res;
-                    }
-
 
                     $remain_ms = json_decode($request->additional_info)->remain_ms;
-                    $fnc = NonConformite::find($request->id);
-                    NonConformite::where('id', $request->id)->update(['review_date' => $request->new_value]);
+                    $fnc->review_date = $request->new_value;
+                    $fnc->push();
+                    $fnc->refresh();
 
-                    if ( !existing_reminder($request->id, $remain_ms) )
+                    if ( !$this->existing_reminder($fnc->id, $remain_ms) && !$fnc->isClosed )
                     {
                         $inspectors = $fnc->nc_folder->audit->users;
 
@@ -368,14 +421,17 @@ class NonConformiteController extends Controller
                         {
                             ScheduledNotification::create(
                                 $inspector, // Target
-                                new FncReviewNotification($request->id), // Notification
-                                Carbon::now()->addRealMilliseconds((int)$remain_ms) // Send At
+                                new FncReviewNotification($fnc->id), // Notification
+                                Carbon::now()->addRealMilliseconds((int)$remain_ms), // Send At
+                                ["fncId" => $fnc->id] //meta data
                             );
+//                            $review_fnc_notification->scheduleAgainAt( Carbon::now()->addRealMilliseconds((int)$remain_ms)->subRealMinute() );
 
                             ScheduledNotification::create(
                                 $inspector, // Target
                                 new FncReviewNotification($request->id, true), // Notification
-                                Carbon::now()->addRealMilliseconds((int)$remain_ms)->subRealMinute() // Send At
+                                Carbon::now()->addRealMilliseconds((int)$remain_ms)->subRealMinute(), // Send At
+                                ["fncId" => $fnc->id] //meta data
                             );
 
                         }
@@ -384,32 +440,86 @@ class NonConformiteController extends Controller
 
                     break;
                 }
+                case 'is_validated':
+                {
+
+                    if ( !$this->can_modify_valid_state($fnc) )
+                    {
+                        if ($fnc->is_validated)
+                        {
+                            if ($this->can_modify_node($fnc))
+                            {
+                                if ( $this->ask_permission_for('modification', $fnc) )
+                                {
+                                    $GLOBALS['to_broadcast'] = [];
+
+                                    DB::commit();
+
+                                    return ResponseTrait::get_info("Demande de permission envoyé");
+                                }
+                                else
+                                {
+                                    $GLOBALS['to_broadcast'] = [];
+
+                                    DB::rollBack();
+
+                                    throw new Exception("Demande existant");
+                                }
+
+                            }
+                            else throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+                        }
+                        else throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+                    }
+
+                    if ($request->new_value)
+                    {
+                        $fnc = $this->valid_node($fnc);
+
+                        $are_updated = $GLOBALS['to_broadcast'];
+                    }
+                    else
+                    {
+                        $fnc = $this->unvalid_node($fnc);
+
+                        $are_updated = $GLOBALS['to_broadcast'];
+                    }
+
+                    break;
+                }
                 default:
+                    DB::rollBack();
+
+                    $GLOBALS['to_broadcast'] = [];
+
                     return ResponseTrait::get('success', 'Nothing was done');
             }
 
         }
-        catch (\Throwable $th) {
-            //throw $th;
-            $goesWell = false;
-        }
-
-        if($goesWell)
-        {
-            DB::commit(); // YES --> finalize it
-
-            // $getId = function($element){ return $element->id.'-fnc'; }; array_map( $getId, $request )
-
-            NodeUpdateEvent::dispatch('fnc', [$request->id.'-fnc'], "update");
-
-            return ResponseTrait::get('success', null);
-        }
-        else
+        catch (\Throwable $th)
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return \response(ResponseTrait::get('error', $th->getMessage()), 500);
+            $GLOBALS['to_broadcast'] = [];
+
+            return ResponseTrait::get_error($th);
         }
+
+        DB::commit(); // YES --> finalize it
+
+        // $getId = function($element){ return $element->id.'-fnc'; }; array_map( $getId, $request )
+
+        if (!empty($are_updated))
+        {
+            $getId = function($element){ return $this->get_broadcast_id($element); };
+
+            NodeUpdateEvent::dispatch('fnc', array_map( $getId, $are_updated ), "update");
+        }
+        else NodeUpdateEvent::dispatch('fnc', [$this->get_broadcast_id($fnc)], "update");
+
+        $GLOBALS['to_broadcast'] = [];
+
+        return ResponseTrait::get_success($fnc);
 
     }
 

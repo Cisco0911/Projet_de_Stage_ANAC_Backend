@@ -9,6 +9,7 @@ use App\Notifications\InfoNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Util\Exception;
 
 class UserController extends Controller
 {
@@ -89,58 +90,86 @@ class UserController extends Controller
 
                 $response = $request->approved ? "accordée" : "rejetée";
 
-                if ($response)
-                {
-                    $lol = 'p';
-//                    switch ($permission_notification->data["model"]) {
-//                        case "App\Models\Audit":
-//                            $audit = new AuditController();
-//                            $audit->del_audit(
-//                                new Request(
-//                                    [
-//                                        'id' => $permission_notification->data["node_id"],
-//                                    ]
-//                                )
-//                            );
-//                            break;
-//                        case "App\Models\NonConformite":
-//                            $fnc = new NonConformiteController();
-//                            $fnc->del_fnc(
-//                                new Request(
-//                                    [
-//                                        'id' => $permission_notification->data["node_id"],
-//                                    ]
-//                                )
-//                            );
-//                            break;
-//                        case "App\Models\DossierSimple":
-//                            $folder = new DossierSimpleController();
-//                            $folder->del_folder(
-//                                new Request(
-//                                    [
-//                                        'id' => $permission_notification->data["node_id"],
-//                                    ]
-//                                )
-//                            );
-//                            break;
-//                        case "App\Models\Fichier":
-//                            $file = new FichierController();
-//                            $file->del_file(
-//                                new Request(
-//                                    [
-//                                        'id' => $permission_notification->data["node_id"],
-//                                    ]
-//                                )
-//                            );
-//                            break;
-//
-//                        default:
-//                            throw new \Exception('Element inconnu', -1);
-//                    }
+                switch ($permission_notification->data["model"]) {
+                    case "App\Models\Audit":
+                        $attachment = new \stdClass();
+                        $attachment->Audit = $permission_notification->data["node_name"];
+
+                        if ($request->approved)
+                        {
+                            $audit = new AuditController();
+                            $res = $audit->del_audit(
+                                new Request(
+                                    [
+                                        'id' => $permission_notification->data["node_id"],
+                                    ]
+                                )
+                            );
+                        }
+
+                        break;
+                    case "App\Models\NonConformite":
+                        $attachment = new \stdClass();
+                        $attachment->Fnc = $permission_notification->data["node_name"];
+
+                        if ($request->approved)
+                        {
+                            $fnc = new NonConformiteController();
+                            $res = $fnc->del_fnc(
+                                new Request(
+                                    [
+                                        'id' => $permission_notification->data["node_id"],
+                                    ]
+                                )
+                            );
+                        }
+
+                        break;
+                    case "App\Models\DossierSimple":
+                        $attachment = new \stdClass();
+                        $attachment->Dossier = $permission_notification->data["node_name"];
+
+                        if ($request->approved)
+                        {
+                            $folder = new DossierSimpleController();
+                            $res = $folder->del_folder(
+                                new Request(
+                                    [
+                                        'id' => $permission_notification->data["node_id"],
+                                    ]
+                                )
+                            );
+                        }
+
+                        break;
+                    case "App\Models\Fichier":
+                        $attachment = new \stdClass();
+                        $attachment->Fichier = $permission_notification->data["node_name"];
+
+                        if ($request->approved)
+                        {
+                            $file = new FichierController();
+                            $res = $file->del_file(
+                                new Request(
+                                    [
+                                        'id' => $permission_notification->data["node_id"],
+                                    ]
+                                )
+                            );
+                        }
+
+                        break;
+
+                    default:
+                        throw new \Exception('Element inconnu', -1);
                 }
 
-                $attachment = new \stdClass();
-                $attachment->node_name = $permission_notification->data["node_name"];
+
+                if (!empty($res) && $res['statue'] == 'error')
+                {
+                    throw new Exception($res['data']->msg);
+                }
+
                 $this->inform(
                     new Request(
                         [
@@ -153,93 +182,144 @@ class UserController extends Controller
                 );
 
             }
-            else
+            elseif ($permission_notification->data["operation"] == 'modification')
             {
-                throw new \Exception("else modificatio", -2);
+
+                $response = $request->approved ? "accordée" : "rejetée";
+
                 switch ($permission_notification->data["model"]) {
                     case "App\Models\Audit":
-                        $audit = new AuditController();
-                        $audit->update_audit(
-                            new Request(
-                                [
-                                    'id' => $permission_notification->data["node_id"],
-                                    'update_object' => 'is_validated',
-                                    'new_value' => 0,
-                                ]
-                            )
-                        );
+                        $attachment = new \stdClass();
+                        $attachment->Audit = $permission_notification->data["node_name"];
+
+                        if ($request->approved)
+                        {
+                            $audit = new AuditController();
+                            $res = $audit->update_audit(
+                                new Request(
+                                    [
+                                        'id' => $permission_notification->data["node_id"],
+                                        'update_object' => 'is_validated',
+                                        'new_value' => 0,
+                                    ]
+                                )
+                            );
+                        }
+
                         break;
                     case "App\Models\checkList":
-                        $checkList = new CheckListController();
-                        $checkList->update_checkList(
-                            new Request(
-                                [
-                                    'id' => $permission_notification->data["node_id"],
-                                    'update_object' => 'is_validated',
-                                    'new_value' => 0,
-                                ]
-                            )
-                        );
+                        $attachment = new \stdClass();
+                        $attachment->checkList = $permission_notification->data["node_name"];
+
+                        if ($request->approved)
+                        {
+                            $checkList = new CheckListController();
+                            $res = $checkList->update_checkList(
+                                new Request(
+                                    [
+                                        'id' => $permission_notification->data["node_id"],
+                                        'update_object' => 'is_validated',
+                                        'new_value' => 0,
+                                    ]
+                                )
+                            );
+                        }
+
                         break;
                     case "App\Models\DossierPreuve":
-                        $dp = new DossierPreuveController();
-                        $dp->update_dp(
-                            new Request(
-                                [
-                                    'id' => $permission_notification->data["node_id"],
-                                    'update_object' => 'is_validated',
-                                    'new_value' => 0,
-                                ]
-                            )
-                        );
+                        $attachment = new \stdClass();
+                        $attachment->Dossier_preuve = $permission_notification->data["node_name"];
+
+                        if ($request->approved)
+                        {
+                            $dp = new DossierPreuveController();
+                            $res = $dp->update_dp(
+                                new Request(
+                                    [
+                                        'id' => $permission_notification->data["node_id"],
+                                        'update_object' => 'is_validated',
+                                        'new_value' => 0,
+                                    ]
+                                )
+                            );
+                        }
+
                         break;
                     case "App\Models\Nc":
-                        $nc = new NcController();
-                        $nc->update_nc(
-                            new Request(
-                                [
-                                    'id' => $permission_notification->data["node_id"],
-                                    'update_object' => 'is_validated',
-                                    'new_value' => 0,
-                                ]
-                            )
-                        );
+                        $attachment = new \stdClass();
+                        $attachment->Nc = $permission_notification->data["node_name"];
+
+                        if ($request->approved)
+                        {$nc = new NcController();
+                            $res = $nc->update_nc(
+                                new Request(
+                                    [
+                                        'id' => $permission_notification->data["node_id"],
+                                        'update_object' => 'is_validated',
+                                        'new_value' => 0,
+                                    ]
+                                )
+                            );
+                        }
+
+
                         break;
                     case "App\Models\NonConformite":
-                        $fnc = new NonConformiteController();
-                        $fnc->update_fnc(
-                            new Request(
-                                [
-                                    'id' => $permission_notification->data["node_id"],
-                                    'update_object' => 'is_validated',
-                                    'new_value' => 0,
-                                ]
-                            )
-                        );
+                        $attachment = new \stdClass();
+                        $attachment->Fnc = $permission_notification->data["node_name"];
+
+                        if ($request->approved)
+                        {
+                            $fnc = new NonConformiteController();
+                            $res = $fnc->update_fnc(
+                                new Request(
+                                    [
+                                        'id' => $permission_notification->data["node_id"],
+                                        'update_object' => 'is_validated',
+                                        'new_value' => 0,
+                                    ]
+                                )
+                            );
+                        }
+
                         break;
                     case "App\Models\DossierSimple":
-                        $folder = new DossierSimpleController();
-                        $folder->update_folder(
-                            new Request(
-                                [
-                                    'id' => $permission_notification->data["node_id"],
-                                    'update_object' => 'is_validated',
-                                    'new_value' => 0,
-                                ]
-                            )
-                        );
+                        $attachment = new \stdClass();
+                        $attachment->Dossier = $permission_notification->data["node_name"];
+
+                        if ($request->approved)
+                        {
+                            $folder = new DossierSimpleController();
+                            $res = $folder->update_folder(
+                                new Request(
+                                    [
+                                        'id' => $permission_notification->data["node_id"],
+                                        'update_object' => 'is_validated',
+                                        'new_value' => 0,
+                                    ]
+                                )
+                            );
+                        }
+
                         break;
                     case "App\Models\Fichier":
-                        $file = new FichierController();
-                        $file->update_file(
-                            new Request(
-                                [
-                                    'id' => $permission_notification->data["node_id"],
-                                    'update_object' => 'is_validated',
-                                    'new_value' => 0,
-                                ]
-                            )
-                        );
+                        $attachment = new \stdClass();
+                        $attachment->Fichier = $permission_notification->data["node_name"];
+
+                        if ($request->approved)
+                        {
+                            $file = new FichierController();
+                            $res = $file->update_file(
+                                new Request(
+                                    [
+                                        'id' => $permission_notification->data["node_id"],
+                                        'update_object' => 'is_validated',
+                                        'new_value' => 0,
+                                    ]
+                                )
+                            );
+                        }
+
                         break;
 
                     default:
@@ -247,15 +327,32 @@ class UserController extends Controller
                 }
             }
 
-//            $permission_notification->delete();
+
+            if (!empty($res) && $res['statue'] != 'success')
+            {
+                throw new Exception($res['data']->msg);
+            }
+
+            $this->inform(
+                new Request(
+                    [
+                        'to' => $permission_notification->data["from_id"],
+                        'object' => "Réponse de la demande d'autorisation",
+                        'msg' => "Demande de modification $response !",
+                        'attachment' => json_encode($attachment),
+                    ]
+                )
+            );
+
+            $permission_notification->delete();
         }
         catch (\Throwable $th)
         {
             DB::rollBack();
-            return ResponseTrait::get('error', $th->getMessage());
+            return ResponseTrait::get_error($th);
         }
 
-        DB::rollBack();
+        DB::commit();
 
         return ResponseTrait::get('success', 'very good');
 

@@ -44,7 +44,7 @@ class InfoNotification extends Notification
      */
     public function via($notifiable)
     {
-        return ['broadcast'];
+        return ['broadcast', 'mail'];
     }
 
     /**
@@ -70,13 +70,35 @@ class InfoNotification extends Notification
         return 'Information';
     }
 
-    // public function toMail($notifiable)
-    // {
-    //     return (new MailMessage)
-    //                 ->line('The introduction to the notification.')
-    //                 ->action('Notification Action', url('/'))
-    //                 ->line('Thank you for using our application!');
-    // }
+    /**
+     * Get the mail representation of the notification.
+     *
+     * @param  mixed  $notifiable
+     * @return \Illuminate\Notifications\Messages\MailMessage
+     */
+    public function toMail($notifiable)
+    {
+//        $action = $this->operation == "deletion" ? "supprimer" : "modifier";
+
+        $attachment = json_decode($this->attachment);
+        $lines = [];
+
+        foreach ($attachment as $key => $value)
+        {
+            array_push($lines, "$key: $value");
+        }
+
+        return (new MailMessage)
+            ->subject("Information: $this->object")
+            ->greeting("Salution, Mr. $notifiable->name !!")
+            ->line($this->msg)
+            ->line("par "."Mr. ".$this->user_from->name[0].".".$this->user_from->second_name)
+            ->line("Information supplémentaire:")
+            ->line($lines)
+            ->action("Accéder à l'application", env("FRONTEND_URL"))
+            ->line("Cordialement,")
+            ->salutation("GESTIONNAIRE DE FICHIER ANAC.");
+    }
 
 
     /**

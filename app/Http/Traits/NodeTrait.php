@@ -10,13 +10,14 @@ use App\Http\Controllers\NcController;
 use App\Http\Controllers\NonConformiteController;
 use App\Http\Controllers\SectionController;
 use App\Http\Controllers\UserController;
+use App\Models\Fichier;
 use App\Notifications\AskPermission;
 use Illuminate\Support\Facades\Auth;
 
 trait NodeTrait
 {
 
-    public function find_node($id, $type)
+    protected function find_node($id, $type)
     {
 
         switch ($type) {
@@ -41,7 +42,41 @@ trait NodeTrait
 
     }
 
-    public function can_modify_node($node, $approved = false)
+    protected function get_broadcast_id($node)
+    {
+        switch ( get_class($node) )
+        {
+            case "App\Models\Audit":
+                $type = 'audit';
+                break;
+            case "App\Models\checkList":
+                $type = 'checkList';
+                break;
+            case "App\Models\DossierPreuve":
+                $type = 'dp';
+                break;
+            case "App\Models\Nc":
+                $type = 'nonC';
+                break;
+            case "App\Models\NonConformite":
+                $type = 'fnc';
+                break;
+            case "App\Models\DossierSimple":
+                $type = 'ds';
+                break;
+            case "App\Models\Fichier":
+                $type = 'f';
+                break;
+
+            default:
+                $type = '';
+                break;
+        }
+
+        return $node->id."-$type";
+    }
+
+    protected function can_modify_node($node, $approved = false)
     {
         if ($approved) return 2;
 
@@ -55,17 +90,21 @@ trait NodeTrait
         return 0;
     }
 
-    public function can_modify_valid_state($node)
+    protected function can_modify_valid_state($node)
     {
-        if ( (int)Auth::user()->right_lvl == 2 )
+        if ( $node->is_validated && Auth::id() == $node->validator_id ) return true;
+        elseif (!$node->is_validated)
         {
-            foreach ($node->services as $service)
+            if ( (int)Auth::user()->right_lvl == 2 )
             {
-                foreach (Auth::user()->services as $user_service)
+                foreach ($node->services as $service)
                 {
-                    if ($user_service->id == $service->id)
+                    foreach (Auth::user()->services as $user_service)
                     {
-                        return true;
+                        if ($user_service->id == $service->id)
+                        {
+                            return true;
+                        }
                     }
                 }
             }
@@ -151,11 +190,77 @@ trait NodeTrait
         return $node;
     }
 
+    protected function can_modify_node_deep_check($node)
+    {
+        if ( !($this->can_modify_node($node) == 2) ) return false;
+        else
+        {
+            if ( !($node instanceof Fichier) )
+            {
+                foreach ( $node->dossiers as $dossier )
+                {
+                    if ( !($this->can_modify_node_deep_check($dossier) == 2) ) return false;
+                }
+                foreach ( $node->fichiers as $fichier )
+                {
+                    if ( !($this->can_modify_node_deep_check($fichier) == 2) ) return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    public function demand_exist($operation, $node)
+    {
+        switch ($operation)
+        {
+            case 'modification':
+            {
+                if ($node->is_validated)
+                {
+                    $validator = UserController::find($node->validator_id);
+
+                    $modification_notif = $validator->notifications()
+                        ->where('type', 'App\Notifications\AskPermission')
+                        ->where('data->operation', 'modification')
+                        ->where('data->node_id', $node->id)
+                        ->first();
+
+                    return $modification_notif;
+                }
+                break;
+            }
+            case 'deletion':
+            {
+                if ($node->is_validated)
+                {
+                    $validator = UserController::find($node->validator_id);
+
+                    $deletion_notif = $validator->notifications()
+                        ->where('type', 'App\Notifications\AskPermission')
+                        ->where('data->operation', 'deletion')
+                        ->where('data->node_id', $node->id)
+                        ->first();
+
+                    return $deletion_notif;
+                }
+                break;
+            }
+        }
+
+        return null;
+    }
+
     protected function ask_permission_for($operation, $node)
     {
+        if ( $this->demand_exist($operation, $node) ) return false;
+
         $validator = UserController::find($node->validator_id);
 
         $validator->notify(new AskPermission($node, $operation));
+
+        return true;
     }
 
 

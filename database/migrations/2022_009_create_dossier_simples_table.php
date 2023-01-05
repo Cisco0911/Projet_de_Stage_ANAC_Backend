@@ -18,11 +18,12 @@ return new class extends Migration
             $table->string('name');
             $table->integer('parent_id');
             $table->string('parent_type');
+            $table->foreignId('section_id')->constrained();
             $table->boolean('is_validated');
             $table->foreign('validator_id')
                 ->references('id')->on('users')
+                ->onUpdate('restrict')
                 ->onDelete('restrict');
-            $table->foreignId('section_id')->constrained();
             $table->timestamps();
         });
     }

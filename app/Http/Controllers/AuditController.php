@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Traits\NodeTrait;
 use App\Http\Traits\ResponseTrait;
 use App\Models\Nc;
 use App\Models\User;
@@ -27,6 +28,7 @@ class AuditController extends Controller
     //
     use ServiableTrait;
     use ResponseTrait;
+    use NodeTrait;
 
     public static function find(int $id)
     {
@@ -78,8 +80,6 @@ class AuditController extends Controller
     {
         DB::beginTransaction();
 
-        $saved = true;
-        $errorResponse = null;
         $audit_family = [];
 
         try {
@@ -88,17 +88,40 @@ class AuditController extends Controller
             $request->validate([
                 'name' => ['required', 'string', 'max:255'],
                 'section_id' => ['required', 'integer'],
-                'services' => ['required', 'string'],
+                'services' => ['required', 'json'],
                 'inspectors' => ['required', 'string'],
-                'ra_id' => ['required', 'integer'],
+                'ra_id' => ['nullable', 'integer'],
             ]);
 
+            $parent = $this->find_node($request->section_id, "App\Models\Section");
+
+            if (empty($parent))
+            {
+                throw new Exception("Parent inexistant.", -4);
+            }
+
+            $feasible = $this->can_modify_node($parent);
+
+            if( $feasible != 2 ) throw new Exception("Vous n'avez pas les droits nécessaires", -3);
+
+            $path_value = $parent->path->value."\\".$request->name;
+            if (Paths::where([ 'value' => $path_value ])->exists())
+            {
+                throw new Exception("L'audit existe déjà.", 0);
+            }
+
             try {
-                $new_audit = new Audit(
+//                $new_audit = new Audit(
+//                    [
+//                        'name' => $request->name,
+//                        'section_id' => $request->section_id,
+////                        'user_id' => $request->ra_id,
+//                    ]
+//                );
+                $new_audit = Auth::user()->audits()->create(
                     [
                         'name' => $request->name,
                         'section_id' => $request->section_id,
-                        'user_id' => $request->ra_id,
                     ]
                 );
 
@@ -106,7 +129,7 @@ class AuditController extends Controller
             }
             catch (\Throwable $th)
             {
-                throw new Exception("L'audit existe déjà.", 0);
+                throw $th;
             }
 
             $inspector_ids = json_decode($request->inspectors) ?? [Auth::user()->id];
@@ -125,15 +148,15 @@ class AuditController extends Controller
 //            $new_checkList = checkList::create( ['audit_id'=> $new_audit->id, 'section_id' => $request->section_id] );
             $new_checkList = $new_audit->checklist()->create( [ 'section_id' => $request->section_id ] );
             $new_checkList->name = 'checkList';
-            $new_checkList->sub_type = 'checkList';
+//            $new_checkList->sub_type = 'checkList';
 
             $new_dp = $new_audit->dossier_preuve()->create( [ 'section_id' => $request->section_id ] );
             $new_dp->name = 'Dossier Preuve';
-            $new_dp->sub_type = 'dp';
+//            $new_dp->sub_type = 'dp';
 
             $new_nonC = $new_audit->nc()->create( [ 'section_id' => $request->section_id ] );
             $new_nonC->name = 'NC';
-            $new_nonC->sub_type = 'nonC';
+//            $new_nonC->sub_type = 'nonC';
 
 
             $pathAudit = Paths::create(
@@ -192,33 +215,19 @@ class AuditController extends Controller
 
 
         }
-        catch (\Throwable $th) {
-            //throw $th;
-            $saved = false;
-
-            $error_object = new \stdClass();
-
-            $error_object->line = $th->getLine();
-            $error_object->msg = $th->getMessage();
-            $error_object->code = $th->getCode();
-        }
-
-        if($saved)
+        catch (\Throwable $th2)
         {
-            DB::commit(); // YES --> finalize it
-
-            $getId = function($element){ if($element->sub_type != null) return $element->id.'-'.$element->sub_type; return $element->id.'-audit'; };
-
-            NodeUpdateEvent::dispatch('audit', array_map( $getId, $audit_family ), 'add');
-
-            return ResponseTrait::get('success', AuditController::find($new_audit->id));
+            DB::rollBack();
+            return ResponseTrait::get_error($th2) ;
         }
-        else
-        {
-            DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return ResponseTrait::get('error', $error_object);
-        }
+        DB::commit(); // YES --> finalize it
+
+        $getId = function($element){ return $this->get_broadcast_id($element); };
+
+        NodeUpdateEvent::dispatch('audit', array_map( $getId, $audit_family ), 'add');
+
+        return ResponseTrait::get_success(self::find($new_audit->id));
 
 
     }
@@ -237,41 +246,34 @@ class AuditController extends Controller
 
             $cache = $this->format($target);
 
-            if(Auth::user()->validator_id == null || $request->approved)
+            $feasible = $this->can_modify_node($target);
+
+            if($feasible)
             {
+                if ($feasible == 2)
+                {
+                    // dd($request);
 
-                // dd($request);
+                    $pathInStorage = "public\\".$target->path->value;
 
-                $pathInStorage = "public\\".$target->path->value;
+                    $target->delete();
+                }
+                else
+                {
+                    $this->ask_permission_for('deletion', $target);
 
-                $target->delete();
+                    DB::commit();
+
+                    return ResponseTrait::get_info("Demande de permission envoyé");
+                }
             }
             else
             {
-                try {
-                    $new_operation = operationNotification::create(
-                        [
-                            'operable_id' => $cache->id,
-                            'operable_type' => "App\Models\Audit",
-                            'operation_type' => 'deletion',
-                            'from_id' => Auth::user()->id,
-                            'validator_id' => Auth::user()->validator_id
-                        ]
-                    );
-                }
-                catch (\Throwable $th) {
-                    return \response(ResponseTrait::get('error', 'en attente'), 500);
-
-                }
-
-                $new_operation->operable;
-                $new_operation->front_type = 'audit';
-                Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Audit', $new_operation, Auth::user()));
-                DB::commit();
-                return ResponseTrait::get('success', 'attente');
+                throw new Exception("Vous n'avez pas les droits nécessaires");
             }
 
-        } catch (\Throwable $th) {
+        }
+        catch (\Throwable $th) {
             //throw $th;
             $goesWell = false;
         }
@@ -292,8 +294,113 @@ class AuditController extends Controller
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return \response(ResponseTrait::get('error', $th->getMessage()), 500);
+            return ResponseTrait::get('error', $th->getMessage());
         }
+
+    }
+
+    function update_audit( Request $request )
+    {
+
+        DB::beginTransaction();
+
+        $goesWell = true;
+        $GLOBALS['to_broadcast'] = [];
+
+        try
+        {
+
+            $request->validate([
+                'id' => ['required', 'integer'],
+                'update_object' => ['required', 'string'],
+                'new_value' => ['required'],
+            ]);
+
+            $audit = Audit::find($request->id);
+
+            switch ($request->update_object)
+            {
+                case 'is_validated':
+                {
+
+                    if ( !$this->can_modify_valid_state($audit) )
+                    {
+                        if ($audit->is_validated)
+                        {
+                            if ($this->can_modify_node($audit))
+                            {
+                                if ( $this->ask_permission_for('modification', $audit) )
+                                {
+                                    $GLOBALS['to_broadcast'] = [];
+
+                                    DB::commit();
+
+                                    return ResponseTrait::get_info("Demande de permission envoyé");
+                                }
+                                else
+                                {
+                                    $GLOBALS['to_broadcast'] = [];
+
+                                    DB::rollBack();
+
+                                    throw new Exception("Demande existant");
+                                }
+
+                            }
+                            else throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+                        }
+                        else throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+                    }
+
+                    if ($request->new_value)
+                    {
+                        $audit = $this->valid_node($audit);
+
+                        $are_updated = $GLOBALS['to_broadcast'];
+                    }
+                    else
+                    {
+                        $audit = $this->unvalid_node($audit);
+
+                        $are_updated = $GLOBALS['to_broadcast'];
+                    }
+
+                    break;
+                }
+                default:
+                    DB::rollBack();
+
+                    $GLOBALS['to_broadcast'] = [];
+
+                    return ResponseTrait::get('success', 'Nothing was done');
+            }
+
+        }
+        catch (\Throwable $th)
+        {
+            DB::rollBack(); // NO --> some error has occurred undo the whole thing
+
+            $GLOBALS['to_broadcast'] = [];
+
+            return ResponseTrait::get_error($th);
+        }
+
+
+        DB::commit(); // YES --> finalize it
+
+        // $getId = function($element){ return $element->id.'-fnc'; }; array_map( $getId, $request )
+
+        if (!empty($are_updated))
+        {
+            $getId = function($element){ return $this->get_broadcast_id($element); };
+
+            NodeUpdateEvent::dispatch('audit', array_map( $getId, $are_updated ), "update");
+        }
+        else NodeUpdateEvent::dispatch('audit', [$this->get_broadcast_id($audit)], "update");
+
+        $GLOBALS['to_broadcast'] = [];
+
+        return ResponseTrait::get_success($audit);
 
     }
 

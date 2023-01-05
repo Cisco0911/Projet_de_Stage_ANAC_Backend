@@ -17,6 +17,7 @@ use App\Models\operationNotification;
 use Illuminate\Support\Facades\Storage;
 use App\Notifications\RemovalNotification;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\URL;
 
 class FichierController extends Controller
 {
@@ -28,12 +29,16 @@ class FichierController extends Controller
     public static function find(int $id)
     {
         $file = Fichier::find($id);
-        $file->section;
-        $file->services;
-        $file->path;
-        $file->parent;
-        $file->operation;
-        $file->url = "http://localhost/overview_of?id=".$file->id;;
+
+        if ($file)
+        {
+            $file->section;
+            $file->services;
+            $file->path;
+            $file->parent;
+            $file->operation;
+            $file->url = URL::signedRoute("overview.file", ["id" => $file->id]);
+        }
 
         return $file;
     }
@@ -69,7 +74,8 @@ class FichierController extends Controller
                 break;
         }
 
-        $node->url = "http://localhost/overview_of?id=".$element->id;
+        $node->url = URL::signedRoute("overview.file", ["id" => $element->id]);
+//        "/overview_of/{$element->id}"
 
         return $node;
     }
@@ -120,9 +126,9 @@ class FichierController extends Controller
        return $fs;
     }
 
-    public function overview_of(Request $request)
+    public function overview_of($id)
     {
-        $path = Fichier::find($request->id)->path->value;
+        $path = Fichier::find($id)->path->value;
 
         return response()->file(\storage_path("app\\public\\$path"));
     }
@@ -133,8 +139,6 @@ class FichierController extends Controller
         DB::beginTransaction();
 
         $saved = true;
-        $errorResponse = null;
-        $failed_jobs = [];
         $added_files = [];
         $duplicated_files = [];
         $new_files = [];
@@ -152,6 +156,17 @@ class FichierController extends Controller
                 'services' => ['required', 'string'],
             ]);
 
+            $parent = $this->find_node($request->parent_id, $request->parent_type);
+
+            if (empty($parent))
+            {
+                throw new Exception("Parent inexistant.", -4);
+            }
+
+            $feasible = $this->can_modify_node($parent);
+
+            if( $feasible != 2 ) throw new Exception("Vous n'avez pas les droits nécessaires\nSi le parent est validé, veuillez faire une demande d'autorisation de modification", -3);
+
             foreach ($request->fichiers as $key => $file) {
                 # code...
 
@@ -163,18 +178,7 @@ class FichierController extends Controller
                 $extension = end($infos);
 
 
-                $new_file = Fichier::create(
-                    [
-                        'section_id' => $request->section_id,
-                        'name' => $full_name,
-                        'size' => $file->getSize(),
-                        'extension' => $extension,
-                        'parent_id' => $request->parent_id,
-                        'parent_type' => $request->parent_type,
-                    ]
-                );
-
-                $path_value = $new_file->parent->path->value."\\".$full_name;
+                $path_value = $parent->path->value."\\".$full_name;
 
                 $path_parts = pathinfo($path_value);
 
@@ -188,7 +192,7 @@ class FichierController extends Controller
                 while ( Paths::where([ 'value' => $path_value ])->exists() ) {
                     # code...
 
-                    $filename = "$original_name($num_copy)";
+                    $filename = $num_copy == 1 ? "$original_name - Copie" : "$original_name - Copie ($num_copy)";
                     $full_name = "$filename.$extension";
                     $path_value = "$dir\\$full_name";
 
@@ -202,13 +206,20 @@ class FichierController extends Controller
                 if (!Storage::exists("public\\".$path_value)) {
                     # code...
 
-                    Fichier::where('id', $new_file->id)->first()->update(['name' => $full_name]);
+                    $new_file = $parent->fichiers()->create(
+                        [
+                            'section_id' => $request->section_id,
+                            'name' => $full_name,
+                            'size' => $file->getSize(),
+                            'extension' => $extension,
+                            'is_validated' => $parent->is_validated ?? 0,
+                            'validator_id' => $parent->validator_id,
+                        ]
+                    );
 
-                    $path = Paths::create(
+                    $path = $new_file->path()->create(
                         [
                             'value' => $path_value,
-                            'routable_id' => $new_file->id,
-                            'routable_type' => 'App\Models\Fichier'
                         ]
                     );
 
@@ -228,26 +239,18 @@ class FichierController extends Controller
                     }
 
                 }
-                else
-                {
-                    $saved = false;
-                    array_push($failed_jobs, $full_name);
-                }
+                else throw new Exception("L'ajout du(des) fichier(s) a échoué", -100);
 
                 if(!is_null($double)) array_push($duplicated_files, $double);
             }
 
 
         }
-        catch (\Throwable $th) {
-            //throw $th;
-            $saved = false;
-
-            $error_object = new \stdClass();
-
-            $error_object->line = $th->getLine();
-            $error_object->msg = $th->getMessage();
-            $error_object->code = $th->getCode();
+        catch (\Throwable $th)
+        {
+            Storage::delete($added_files);
+            DB::rollBack();
+            return ResponseTrait::get_error($th);
         }
 
         if($saved && empty($duplicated_files))
@@ -278,24 +281,6 @@ class FichierController extends Controller
 
             return ResponseTrait::get('success', $good);
         }
-        elseif (!empty($failed_jobs) && empty($error_object))
-        {
-            Storage::delete($added_files);
-            DB::rollBack(); // NO --> some error has occurred undo the whole thing
-            $error_object = new \stdClass();
-
-            $error_object->msg = 'La création de ces fichiers a échoué';
-            $error_object->list = $failed_jobs;
-
-            return ResponseTrait::get('error', $error_object);
-        }
-        else
-        {
-            Storage::delete($added_files);
-            DB::rollBack(); // NO --> some error has occurred undo the whole thing
-
-            return ResponseTrait::get('error', $error_object);
-        }
 
         // DB::endTransaction();
 
@@ -317,37 +302,30 @@ class FichierController extends Controller
 
             $cache = $this->format($target);
 
-            if(Auth::user()->validator_id == null || $request->approved)
+            $feasible = $this->can_modify_node($target);
+
+            if($feasible)
             {
+                if ($feasible == 2)
+                {
+                    // dd($request);
 
-                // dd($request);
+                    $pathInStorage = "public\\".$target->path->value;
 
-                $pathInStorage = "public\\".$target->path->value;
+                    $target->delete();
+                }
+                else
+                {
+                    $this->ask_permission_for('deletion', $target);
 
-                $target->delete();
+                    DB::commit();
+
+                    return ResponseTrait::get_info("Demande de permission envoyé");
+                }
             }
             else
             {
-                try {
-                    $new_operation = operationNotification::create(
-                        [
-                            'operable_id' => $cache->id,
-                            'operable_type' => "App\Models\Fichier",
-                            'operation_type' => 'deletion',
-                            'from_id' => Auth::user()->id,
-                            'validator_id' => Auth::user()->validator_id
-                        ]
-                    );
-                } catch (\Throwable $th) {
-                    return \response(ResponseTrait::get('error', 'en attente'), 500);
-
-                }
-
-                $new_operation->operable;
-                $new_operation->front_type = 'f';
-                Notification::sendNow(User::find(Auth::user()->validator_id), new RemovalNotification('Fichier', $new_operation, Auth::user()));
-                DB::commit();
-                return 'attente';
+                throw new Exception("Vous n'avez pas les droits nécessaires");
             }
 
         }
@@ -372,8 +350,114 @@ class FichierController extends Controller
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return \response(ResponseTrait::get('error', $th->getMessage()), 500);
+            return ResponseTrait::get('error', $th->getMessage());
         }
+
+    }
+
+    function update_file( Request $request )
+    {
+
+        DB::beginTransaction();
+
+        $goesWell = true;
+
+        $GLOBALS['to_broadcast'] = [];
+
+        try
+        {
+
+            $request->validate([
+                'id' => ['required', 'integer'],
+                'update_object' => ['required', 'string'],
+                'new_value' => ['required'],
+            ]);
+
+            $file = Fichier::find($request->id);
+
+            switch ($request->update_object)
+            {
+                case 'is_validated':
+                {
+
+                    if ( !$this->can_modify_valid_state($file) )
+                    {
+                        if ($file->is_validated)
+                        {
+                            if ($this->can_modify_node($file))
+                            {
+                                if ( $this->ask_permission_for('modification', $file) )
+                                {
+                                    $GLOBALS['to_broadcast'] = [];
+
+                                    DB::commit();
+
+                                    return ResponseTrait::get_info("Demande de permission envoyé");
+                                }
+                                else
+                                {
+                                    $GLOBALS['to_broadcast'] = [];
+
+                                    DB::rollBack();
+
+                                    throw new Exception("Demande existant");
+                                }
+
+                            }
+                            else throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+                        }
+                        else throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+                    }
+
+                    if ($request->new_value)
+                    {
+                        $file = $this->valid_node($file);
+
+                        $are_updated = $GLOBALS['to_broadcast'];
+                    }
+                    else
+                    {
+                        $file = $this->unvalid_node($file);
+
+                        $are_updated = $GLOBALS['to_broadcast'];
+                    }
+
+                    break;
+                }
+                default:
+                    DB::rollBack();
+
+                    $GLOBALS['to_broadcast'] = [];
+
+                    return ResponseTrait::get('success', 'Nothing was done');
+            }
+
+        }
+        catch (\Throwable $th)
+        {
+            DB::rollBack(); // NO --> some error has occurred undo the whole thing
+
+            $GLOBALS['to_broadcast'] = [];
+
+            return ResponseTrait::get_error($th);
+        }
+
+
+        DB::commit(); // YES --> finalize it
+
+        // $getId = function($element){ return $element->id.'-fnc'; }; array_map( $getId, $request )
+
+        if (!empty($are_updated))
+        {
+            $getId = function($element){ return $this->get_broadcast_id($element); };
+
+            NodeUpdateEvent::dispatch('f', array_map( $getId, $are_updated ), "update");
+        }
+        else NodeUpdateEvent::dispatch('f', [$this->get_broadcast_id($file)], "update");
+
+        $GLOBALS['to_broadcast'] = [];
+
+        return ResponseTrait::get_success($file);
 
     }
 
@@ -395,8 +479,6 @@ class FichierController extends Controller
 
         DB::beginTransaction();
 
-        $goes_well = true;
-
         try
         {
             $request->validate([
@@ -405,10 +487,21 @@ class FichierController extends Controller
                 'id' => ['required', 'integer'],
             ]);
 
+            $new_parent = $this->find_node($request->destination_id, $request->destination_type);
             $old_file = Fichier::find($request->id);
+
+            if (empty($new_parent))
+            {
+                throw new Exception("Parent inexistant.", -4);
+            }
+
+            $feasible = $this->can_modify_node($new_parent);
+
+            if( ($feasible != 2) || !$this->can_modify_node_deep_check($old_file) ) throw new Exception("Vous n'avez pas les droits nécessaires\nSi le parent ou le fichier est validé, veuillez faire une demande d'autorisation de modification", -3);
+
             $from = json_decode( json_encode( 'public\\'.$old_file->path->value ) );
 
-            $destination = $this->find_node($request->destination_id, $request->destination_type);
+            $destination = $new_parent;
 
 //            DossierSimple::where('id', $request->id)->update(
 //                [
@@ -476,6 +569,8 @@ class FichierController extends Controller
 
                         $existant_file = $path->routable;
 
+                        if (!$this->can_modify_node_deep_check($existant_file)) throw new Exception("Le fichier à la destination est validé");
+
                         $this->del_file(
                             new Request(
                                 [
@@ -530,31 +625,20 @@ class FichierController extends Controller
         }
         catch (\Throwable $th)
         {
-
             DB::rollBack();
 
-            return ResponseTrait::get('error', $th->getMessage());
+            return ResponseTrait::get_error($th);
         }
 
 
-
-        if($goes_well)
+        DB::commit(); // YES --> finalize it
+        try
         {
-            DB::commit(); // YES --> finalize it
-            try
-            {
-                NodeUpdateEvent::dispatch('f', [$new_file->id.'-f'], "update");
-            }
-            catch (\Throwable $e)
-            {}
-            return ResponseTrait::get('success', $new_file);
+            NodeUpdateEvent::dispatch('f', [$new_file->id.'-f'], "update");
         }
-        else
-        {
-            DB::rollBack(); // NO --> some error has occurred undo the whole thing
-
-            return ResponseTrait::get('error', $goes_well);
-        }
+        catch (\Throwable $e)
+        {}
+        return ResponseTrait::get('success', $new_file);
 
     }
 
@@ -573,17 +657,22 @@ class FichierController extends Controller
                 'id' => ['required', 'integer'],
             ]);
 
+            $new_parent = $this->find_node($request->destination_id, $request->destination_type);
+
+            if (empty($new_parent))
+            {
+                throw new Exception("Parent inexistant.", -4);
+            }
+
+            $feasible = $this->can_modify_node($new_parent);
+
+            if( $feasible != 2 ) throw new Exception("Vous n'avez pas les droits nécessaires\nSi le parent est validé, veuillez faire une demande d'autorisation de modification", -3);
+
             $old_file = Fichier::find($request->id);
             $from = json_decode( json_encode( 'public\\'.$old_file->path->value ) );
 
-            $destination = $this->find_node($request->destination_id, $request->destination_type);
+            $destination = $new_parent;
 
-//            DossierSimple::where('id', $request->id)->update(
-//                [
-//                    'parent_id' => $request->destination_id,
-//                    'parent_type' => $request->destination_type
-//                ]
-//            );
 
             if ( Paths::where([ 'value' => $destination->path->value.'\\'.$old_file->name ])->exists() )
             {
@@ -591,11 +680,9 @@ class FichierController extends Controller
                 {
                     case 1:
                     {
-                        $new_file = Fichier::where(
+                        $new_file = $destination->fichiers()->where(
                             [
                                 'name' => $old_file->name,
-                                'parent_id' => (int)$request->destination_id,
-                                'parent_type' => $request->destination_type,
                             ]
                         )->first();
 
@@ -658,6 +745,8 @@ class FichierController extends Controller
                         $path = Paths::where([ 'value' => $destination->path->value.'\\'.$old_file->name ])->first();
 
                         $existant_file = $path->routable;
+
+                        if (!$this->can_modify_node_deep_check($existant_file)) throw new Exception("Le fichier existant à la destination est validé");
 
                         $this->del_file(
                             new Request(
@@ -746,28 +835,18 @@ class FichierController extends Controller
 
             DB::rollBack();
 
-            return ResponseTrait::get('error', $th->getMessage());
+            return ResponseTrait::get_error($th);
         }
 
 
-
-        if($goes_well)
+        DB::commit(); // YES --> finalize it
+        try
         {
-            DB::commit(); // YES --> finalize it
-            try
-            {
-                if ((int)$request->on_exist != 1 )NodeUpdateEvent::dispatch('f', [$new_file->id.'-f'], "add");
-            }
-            catch (\Throwable $e)
-            {}
-            return ResponseTrait::get('success', $new_file);
+            if ((int)$request->on_exist != 1 )NodeUpdateEvent::dispatch('f', [$new_file->id.'-f'], "add");
         }
-        else
-        {
-            DB::rollBack(); // NO --> some error has occurred undo the whole thing
-
-            return ResponseTrait::get('error', $goes_well);
-        }
+        catch (\Throwable $e)
+        {}
+        return ResponseTrait::get('success', $new_file);
 
     }
 }

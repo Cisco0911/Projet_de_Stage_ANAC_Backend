@@ -96,24 +96,28 @@ Route::middleware('auth:sanctum')->group(
         Route::get('get_audits', [AuditController::class, 'get_audits']);
         Route::post('add_audit', [AuditController::class, 'add_audit']);
         Route::delete('del_audit', [AuditController::class, 'del_audit']);
+        Route::post('update_audit', [AuditController::class, 'update_audit']);
 
 
 
         // checkList
         Route::get('get_checkLists', [CheckListController::class, 'get_checkLists']);
         Route::post('add_checkLists', [CheckListController::class, 'add_checkLists']);
+        Route::post('update_checkList', [CheckListController::class, 'update_checkList']);
 
 
 
         // Dossier Preuve
         Route::get('get_Dps', [DossierPreuveController::class, 'get_Dps']);
         Route::post('add_Dps', [DossierPreuveController::class, 'add_Dps']);
+        Route::post('update_dp', [DossierPreuveController::class, 'update_dp']);
 
 
 
         // Nc
         Route::get('get_NonCs', [NcController::class, 'get_NonCs']);
         Route::post('add_Ncs', [NcController::class, 'add_Ncs']);
+        Route::post('update_nc', [NcController::class, 'update_nc']);
 
 
 
@@ -127,9 +131,12 @@ Route::middleware('auth:sanctum')->group(
 
         // Fichier
         Route::get('get_fs', [FichierController::class, 'get_fs']);
-        Route::get('overview_of', [FichierController::class, 'overview_of']);
+        Route::get("overview_of/{id}", [FichierController::class, 'overview_of'])
+            ->name("overview.file")
+            ->middleware('signed');
         Route::post('add_files', [FichierController::class, 'add_files']);
         Route::delete('del_file', [FichierController::class, 'del_file']);
+        Route::post('update_file', [FichierController::class, 'update_file']);
         Route::post('move_file', [FichierController::class, 'move_file']);
         Route::post('copy_file', [FichierController::class, 'copy_file']);
 
@@ -141,7 +148,7 @@ Route::middleware('auth:sanctum')->group(
         Route::post('add_folder', [DossierSimpleController::class, 'add_folder']);
         Route::delete('del_folder', [DossierSimpleController::class, 'del_folder']);
         Route::post('update_folder', [DossierSimpleController::class, 'update_folder']);
-        Route::post('move_folder', [DossierSimpleController::class, 'move_folder']);        Route::post('move_folder', [DossierSimpleController::class, 'move_folder']);
+        Route::post('move_folder', [DossierSimpleController::class, 'move_folder']);
         Route::post('copy_folder', [DossierSimpleController::class, 'copy_folder']);
         Route::get('test', [DossierSimpleController::class, 'test']);
 
@@ -281,7 +288,7 @@ Route::middleware('auth:sanctum')->group(
                     # code...
                     $id_arr = explode('-', $value);
 
-                    $new_request = json_decode('{}');
+                    $new_request = new stdClass();
                     $new_request->id = $id_arr[0]; $new_request->type = $id_arr[1];
 
                     // $new_request->id = (int)$id_arr[0];
@@ -295,11 +302,35 @@ Route::middleware('auth:sanctum')->group(
             }
         );
 
+
+        Route::get('notification_mail_view', function () {
+            $user = UserController::find(1);
+
+            return (new \App\Notifications\FncReviewNotification(75, true))
+                ->toMail($user);
+        });
+
+//        $user = UserController::find(1);
+//        $folder = DossierSimpleController::find(200);
+//
+//        return (new \App\Notifications\AskPermission($folder, "deletion"))
+//            ->toMail($user);
+
+//        $user = UserController::find(2);
+//        $validator = UserController::find(1);
+//        $folder = DossierSimpleController::find(200);
+//
+//        $attachment = new \stdClass();
+//        $attachment->Dossier = $folder->name;
+//
+//        return (new \App\Notifications\InfoNotification("Réponse de la demande d'autorisation", "Demande de modification approuvé !", json_encode($attachment), $validator))
+//            ->toMail($user);
+
     }
 );
 
 
-    Route::get('user', function()
+Route::get('user', function()
     {
         $authUser = Auth::user();
         if ($authUser)
@@ -368,6 +399,5 @@ Route::middleware('auth:sanctum')->group(
         }
 
         return $authUser;
-    }
-);
+    });
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Http\Controllers\UserController;
 use App\Models\Paths;
 use App\Models\Fichier;
 use App\Models\Section;
@@ -18,10 +19,11 @@ class DossierSimple extends Model
     protected $fillable = [
         'name',
         'section_id',
-        'parent_id',
-        'parent_type',
+        'is_validated',
+        'validator_id',
+//        'parent_id',
+//        'parent_type',
     ];
-
 
 
 

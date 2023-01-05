@@ -431,7 +431,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->get_dependency_data($jobs, $job->dependencies[0]);
 
-                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
+                                    if ( empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -454,7 +454,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->get_dependency_data($jobs, $job->from_dependency[0]);
 
-                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
+                                    if ( empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -531,7 +531,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->get_dependency_data($jobs, $job->dependencies[0]);
 
-                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
+                                    if ( empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -553,7 +553,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->get_dependency_data($jobs, $job->from_dependency[0]);
 
-                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
+                                    if ( empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -683,8 +683,9 @@ class NodeController extends Controller
                                 if( !empty($job->dependencies) )
                                 {
                                     $dependency_data = $this->get_dependency_data($jobs, $job->dependencies[0]);
+//                                    return $dependency_data;
 
-                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
+                                    if ( empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -707,7 +708,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->get_dependency_data($jobs, $job->from_dependency[0]);
 
-                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
+                                    if ( empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -783,7 +784,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->get_dependency_data($jobs, $job->dependencies[0]);
 
-                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
+                                    if ( empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 
@@ -807,7 +808,7 @@ class NodeController extends Controller
                                 {
                                     $dependency_data = $this->get_dependency_data($jobs, $job->from_dependency[0]);
 
-                                    if ( !empty($dependency_data) || ($dependency_data->state == 'error') )
+                                    if ( empty($dependency_data) || ($dependency_data->state == 'error') )
                                     {
                                         $job->etat = 'error';
 

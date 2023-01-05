@@ -18,8 +18,10 @@ class Fichier extends Model
         'name',
         'extension',
         'size',
-        'parent_id',
-        'parent_type',
+        'is_validated',
+        'validator_id',
+//        'parent_id',
+//        'parent_type',
     ];
 
 
@@ -53,7 +55,7 @@ class Fichier extends Model
         parent::boot();
 
         static::deleting(function($file) { // before delete() method call this
-           
+
             $file->services()->detach();
             $file->path()->delete();
             $file->operation()->delete();
