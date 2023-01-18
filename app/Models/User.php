@@ -11,6 +11,7 @@ use App\Models\operationNotification;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Thomasjohnkane\Snooze\ScheduledNotification;
 use Thomasjohnkane\Snooze\Traits\SnoozeNotifiable;
 
 class User extends Authenticatable
@@ -90,5 +91,16 @@ class User extends Authenticatable
 //    {
 //        return $this->hasMany(operationNotification::class, 'from_id');
 //    }
+
+
+    public static function boot() {
+        parent::boot();
+
+        static::deleting(function($user) { // before delete() method call this
+
+            ScheduledNotification::cancelByTarget($user);
+
+        });
+    }
 
 }

@@ -19,6 +19,9 @@ use App\Notifications\RemovalNotification;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 
+/**
+ *
+ */
 class FichierController extends Controller
 {
     //
@@ -26,7 +29,11 @@ class FichierController extends Controller
     use ResponseTrait;
     use NodeTrait;
 
-    public static function find(int $id)
+    /**
+     * @param int $id
+     * @return Fichier
+     */
+    public static function find(int $id) : Fichier
     {
         $file = Fichier::find($id);
 
@@ -43,6 +50,10 @@ class FichierController extends Controller
         return $file;
     }
 
+    /**
+     * @param $element
+     * @return mixed
+     */
     function format($element)
     {
         $element->services;
@@ -81,41 +92,15 @@ class FichierController extends Controller
     }
 
 
+    /**
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
     public function get_fs()
     {
        $fs = Fichier::all();
 
        foreach ($fs as $key => $fichier) {
         # code...
-
-        // $fichier->services;
-
-        // $type = $fs[$key]->parent_type;
-
-        // switch ($type) {
-        //     case "App\Models\Audit":
-        //         $type = 'audit';
-        //         break;
-        //     case "App\Models\checkList":
-        //         $type = 'checkList';
-        //         break;
-        //     case "App\Models\DossierPreuve":
-        //         $type = 'dp';
-        //         break;
-        //     case "App\Models\Nc":
-        //         $type = 'nonC';
-        //         break;
-        //     case "App\Models\NonConformite":
-        //         $type = 'fnc';
-        //         break;
-        //     case "App\Models\DossierSimple":
-        //         $type = 'ds';
-        //         break;
-
-        //     default:
-        //         $type = '';
-        //         break;
-        // }
 
         $fs[$key] = $this->format($fichier);
 
@@ -126,6 +111,10 @@ class FichierController extends Controller
        return $fs;
     }
 
+    /**
+     * @param $id
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+     */
     public function overview_of($id)
     {
         $path = Fichier::find($id)->path->value;
@@ -133,6 +122,46 @@ class FichierController extends Controller
         return response()->file(\storage_path("app\\public\\$path"));
     }
 
+    /**
+     * @param Request $request
+     * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+     */
+    public function download_file(Request $request)
+    {
+        $file = self::find($request->id);
+
+        return response()->download(\storage_path("app\\public\\{$file->path->value}"), $file->name);
+    }
+
+    /**
+     * @param $destination
+     * @param $old_name
+     * @return string
+     */
+    protected function getNewName($destination, $old_name) : string
+    {
+        $num_copy = 1;
+        $new_name = $old_name;
+
+        $pathInfo = pathinfo($old_name);
+
+        while (Paths::where([ 'value' => $destination->path->value.'\\'.$new_name ])->exists()) {
+            # code...
+
+            $set_num = $num_copy == 1 ? "" : " ($num_copy)";
+
+            $new_name = $pathInfo["filename"]." - Copie$set_num.{$pathInfo["extension"]}";
+
+            $num_copy++;
+        }
+
+        return $new_name;
+    }
+
+    /**
+     * @param Request $request
+     * @return array
+     */
     public function add_files(Request $request)
     {
 
@@ -144,9 +173,6 @@ class FichierController extends Controller
         $new_files = [];
 
         try {
-            //code...
-
-            // dd($request);
 
             $request->validate([
                 'section_id' => ['required', 'integer'],
@@ -177,29 +203,11 @@ class FichierController extends Controller
                 $infos = explode(".",$full_name);
                 $extension = end($infos);
 
+                $dir = $parent->path->value;
 
-                $path_value = $parent->path->value."\\".$full_name;
+                $full_name = $this->getNewName($parent, $full_name);
 
-                $path_parts = pathinfo($path_value);
-
-                $dir = $path_parts['dirname'];
-                $filename = $path_parts['filename'];
-
-                $original_name = $filename;
-
-                $num_copy = 1;
-
-                while ( Paths::where([ 'value' => $path_value ])->exists() ) {
-                    # code...
-
-                    $filename = $num_copy == 1 ? "$original_name - Copie" : "$original_name - Copie ($num_copy)";
-                    $full_name = "$filename.$extension";
-                    $path_value = "$dir\\$full_name";
-
-                    $double = $full_name;
-
-                    $num_copy++;
-                }
+                $path_value = $parent->path->value."\\$full_name";
 
                 if ( Storage::exists("public\\".$path_value) ) Storage::delete("public\\".$path_value);
 
@@ -252,40 +260,60 @@ class FichierController extends Controller
             DB::rollBack();
             return ResponseTrait::get_error($th);
         }
+        DB::commit(); // YES --> finalize it
+        // $new_file->url = "http://localhost/overview_of?id=".$new_file->id;
+        // $new_file->parent_type = "llllo";
 
-        if($saved && empty($duplicated_files))
+        $getId = function($element){ return $element->id.'-f'; };
+
+        NodeUpdateEvent::dispatch('f', array_map( $getId, $new_files ), 'add');
+
+        $files = new \stdClass();
+        $idx = 0;
+
+        foreach ($new_files as $new_file)
         {
-            DB::commit(); // YES --> finalize it
-            // $new_file->url = "http://localhost/overview_of?id=".$new_file->id;
-            // $new_file->parent_type = "llllo";
-
-            $getId = function($element){ return $element->id.'-f'; };
-
-            NodeUpdateEvent::dispatch('f', array_map( $getId, $new_files ), 'add');
-
-            $good = "ok";
-
-            return ResponseTrait::get('success', $good);
-        }
-        elseif ($saved && !empty($duplicated_files))
-        {
-            DB::commit(); // YES --> finalize it
-            // $new_file->url = "http://localhost/overview_of?id=".$new_file->id;
-            // $new_file->parent_type = "llllo";
-
-            $getId = function($element){ return $element->id.'-f'; };
-
-            NodeUpdateEvent::dispatch('f', array_map( $getId, $new_files ), 'add');
-
-            $good = ['msg' => 'duplicated', 'list' => $duplicated_files];
-
-            return ResponseTrait::get('success', $good);
+            $files->{$idx} = $new_file;
+            $idx++;
         }
 
-        // DB::endTransaction();
+        return ResponseTrait::get_success($files);
+
+//        if($saved && empty($duplicated_files))
+//        {
+//            DB::commit(); // YES --> finalize it
+//            // $new_file->url = "http://localhost/overview_of?id=".$new_file->id;
+//            // $new_file->parent_type = "llllo";
+//
+//            $getId = function($element){ return $element->id.'-f'; };
+//
+//            NodeUpdateEvent::dispatch('f', array_map( $getId, $new_files ), 'add');
+//
+//            $good = "ok";
+//
+//            return ResponseTrait::get_success($new_files);
+//        }
+//        elseif ($saved && !empty($duplicated_files))
+//        {
+//            DB::commit(); // YES --> finalize it
+//            // $new_file->url = "http://localhost/overview_of?id=".$new_file->id;
+//            // $new_file->parent_type = "llllo";
+//
+//            $getId = function($element){ return $element->id.'-f'; };
+//
+//            NodeUpdateEvent::dispatch('f', array_map( $getId, $new_files ), 'add');
+//
+//            $good = ['msg' => 'duplicated', 'list' => $duplicated_files];
+//
+//            return ResponseTrait::get('success', $good);
+//        }
 
     }
 
+    /**
+     * @param Request $request
+     * @return array
+     */
     public function del_file(Request $request)
     {
 
@@ -355,7 +383,11 @@ class FichierController extends Controller
 
     }
 
-    function update_file( Request $request )
+    /**
+     * @param Request $request
+     * @return array
+     */
+    function update_file(Request $request )
     {
 
         DB::beginTransaction();
@@ -424,6 +456,39 @@ class FichierController extends Controller
 
                     break;
                 }
+                case 'name':
+                {
+
+                    if($this->can_modify_node($file) !== 2) throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+
+                    $from = $file->path->value;
+
+                    $path_info = pathinfo($from);
+
+                    if ( Paths::where([ 'value' => "{$file->parent->path->value}\\{$request->new_value}.{$path_info["extension"]}" ])->exists() ) throw new Exception("Un fichier du même emplacement porte déjà ce nom !", -1);
+
+                    $file->name = "{$request->new_value}.{$path_info["extension"]}";
+
+                    $file->push();
+                    $file->refresh();
+
+                    $to = $this->update_path($file);
+
+                    if (empty($to)) throw new Exception("Une erreur est survenue !");
+
+                    if ( Storage::exists("public\\$to") )
+                    {
+                        Storage::deleteDirectory("public\\$to");
+                        Storage::delete("public\\$to");
+                    }
+
+                    rename( storage_path("app\\public\\$from"), storage_path("app\\public\\$to") );
+
+                    $file->push();
+                    $file->refresh();
+
+                    break;
+                }
                 default:
                     DB::rollBack();
 
@@ -461,6 +526,10 @@ class FichierController extends Controller
 
     }
 
+    /**
+     * @param $file
+     * @return string
+     */
     public function update_path($file)
     {
         $parent = $file->parent;
@@ -474,6 +543,10 @@ class FichierController extends Controller
 
     }
 
+    /**
+     * @param Request $request
+     * @return array
+     */
     public function move_file(Request $request)
     {
 
@@ -530,23 +603,14 @@ class FichierController extends Controller
                     }
                     case 2:
                     {
-                        $num_copy = 1;
-                        $new_name = $old_file->name;
-
-                        while (Paths::where([ 'value' => $destination->path->value.'\\'.$new_name ])->exists()) {
-                            # code...
-
-                            $set_num = $num_copy == 1 ? "" : " ($num_copy)";
-
-                            $new_name = $old_file->name." - Copie$set_num";
-
-                            $num_copy++;
-                        }
+                        $new_name = $this->getNewName($destination, $old_file->name);
 
                         $old_file->name = $new_name;
 
                         $old_file->parent_id = $request->destination_id;
                         $old_file->parent_type = $request->destination_type;
+                        $old_file->is_validated = $destination->is_validated ?? 0;
+                        $old_file->validator_id = $destination->validator_id;
 
                         $old_file->push();
 
@@ -604,6 +668,8 @@ class FichierController extends Controller
             {
                 $old_file->parent_id = $request->destination_id;
                 $old_file->parent_type = $request->destination_type;
+                $old_file->is_validated = $destination->is_validated ?? 0;
+                $old_file->validator_id = $destination->validator_id;
 
                 $old_file->push();
 
@@ -642,6 +708,10 @@ class FichierController extends Controller
 
     }
 
+    /**
+     * @param Request $request
+     * @return array
+     */
     public function copy_file(Request $request)
     {
 
@@ -692,24 +762,15 @@ class FichierController extends Controller
                     }
                     case 2:
                     {
-                        $num_copy = 1;
-                        $new_name = $old_file->name;
-
-                        while (Paths::where([ 'value' => $destination->path->value.'\\'.$new_name ])->exists()) {
-                            # code...
-
-                            $set_num = $num_copy == 1 ? "" : " ($num_copy)";
-
-                            $new_name = $old_file->name." - Copie$set_num";
-
-                            $num_copy++;
-                        }
+                        $new_name = $this->getNewName($destination, $old_file->name);
 
                         $new_file = new Fichier(
                             [
                                 'name' => $new_name,
                                 'size' => $old_file->size,
                                 'extension' => $old_file->extension,
+                                'is_validated' => $destination->is_validated ?? 0,
+                                'validator_id' => $destination->validator_id,
                                 'section_id' => $destination->section_id ?? $destination->id,
                             ]
                         );
@@ -801,6 +862,8 @@ class FichierController extends Controller
                         'name' => $old_file->name,
                         'size' => $old_file->size,
                         'extension' => $old_file->extension,
+                        'is_validated' => $destination->is_validated ?? 0,
+                        'validator_id' => $destination->validator_id,
                         'section_id' => $destination->section_id ?? $destination->id,
                     ]
                 );

@@ -13,6 +13,7 @@ use App\Models\FichierDePreuve;
 use App\Models\operationNotification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Thomasjohnkane\Snooze\ScheduledNotification;
 
 class NonConformite extends Model
 {
@@ -33,6 +34,11 @@ class NonConformite extends Model
     public function nc_folder()
     {
         return $this->belongsTo(Nc::class, 'nc_id');
+    }
+
+    public function audit_folder()
+    {
+        return $this->nc_folder->audit;
     }
 
     public function services()
@@ -60,12 +66,6 @@ class NonConformite extends Model
         return $this->morphOne(Paths::class, 'routable');
     }
 
-    public function operation()
-    {
-        return $this->morphOne(operationNotification::class, 'operable');
-    }
-
-
     public static function boot() {
         parent::boot();
 
@@ -76,7 +76,13 @@ class NonConformite extends Model
 
             $fnc->services()->detach();
             $fnc->path()->delete();
-            $fnc->operation()->delete();
+
+            $review_reminders = ScheduledNotification::findByMeta("fncId", $fnc->id);
+            foreach ($review_reminders as $review_reminder)
+            {
+                if ( $review_reminder->isCancelled() || $review_reminder->isSent() ) continue;
+                else $review_reminder->cancel();
+            }
 
         });
     }

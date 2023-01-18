@@ -11,8 +11,9 @@ class Section extends Model
 {
     use HasFactory;
 
-
-
+    protected $fillable = [
+        'name',
+    ];
 
 
 
@@ -24,6 +25,11 @@ class Section extends Model
     public function path()
     {
         return $this->morphOne(Paths::class, 'routable');
+    }
+
+    public function audits()
+    {
+        return $this->hasMany(Audit::class);
     }
 
     public function fichiers()

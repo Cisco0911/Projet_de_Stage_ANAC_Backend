@@ -24,3 +24,17 @@ Broadcast::channel('user.{validator_id}', function ($user, $validator_id) {
 Broadcast::channel('user.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });
+
+Broadcast::channel('nodeUpdate.{service_id}',
+    function ($user, $service_id)
+    {
+//        if ( $user->services()->where(['id' => $service_id])->exists() ) return true;
+//        return (int)$user->services[0]->id === (int)$service_id;
+
+        foreach ($user->services as $service)
+        {
+            if ( (int)$service->id === (int)$service_id ) return true;
+        }
+        return false;
+    }
+);

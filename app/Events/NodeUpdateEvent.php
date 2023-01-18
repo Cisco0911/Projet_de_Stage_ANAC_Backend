@@ -10,6 +10,7 @@ use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Support\Facades\Auth;
 
 class NodeUpdateEvent implements ShouldBroadcast
 {
@@ -44,6 +45,13 @@ class NodeUpdateEvent implements ShouldBroadcast
      */
     public function broadcastOn()
     {
-        return new Channel('nodeUpdate');
+        $channels = [];
+
+        foreach (Auth::user()->services as $service)
+        {
+            array_push($channels, new PrivateChannel("nodeUpdate.{$service->id}"));
+        }
+
+        return $channels;
     }
 }

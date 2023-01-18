@@ -17,7 +17,7 @@ class UserController extends Controller
 
     use ResponseTrait;
 
-    public static function find(int $id)
+    public static function find(int $id) : User
     {
         $users = User::find($id);
         $users->services;
@@ -31,7 +31,7 @@ class UserController extends Controller
 
     public function get_users()
     {
-        $users = User::all();
+        $users = User::where("id", "!=", 0)->get();
 
         foreach ($users as $key => $user) {
             # code...
@@ -325,24 +325,24 @@ class UserController extends Controller
                     default:
                         throw new \Exception('Element inconnu', -1);
                 }
+
+
+                if (!empty($res) && $res['statue'] != 'success')
+                {
+                    throw new Exception($res['data']->msg);
+                }
+
+                $this->inform(
+                    new Request(
+                        [
+                            'to' => $permission_notification->data["from_id"],
+                            'object' => "Réponse de la demande d'autorisation",
+                            'msg' => "Demande de modification $response !",
+                            'attachment' => json_encode($attachment),
+                        ]
+                    )
+                );
             }
-
-
-            if (!empty($res) && $res['statue'] != 'success')
-            {
-                throw new Exception($res['data']->msg);
-            }
-
-            $this->inform(
-                new Request(
-                    [
-                        'to' => $permission_notification->data["from_id"],
-                        'object' => "Réponse de la demande d'autorisation",
-                        'msg' => "Demande de modification $response !",
-                        'attachment' => json_encode($attachment),
-                    ]
-                )
-            );
 
             $permission_notification->delete();
         }

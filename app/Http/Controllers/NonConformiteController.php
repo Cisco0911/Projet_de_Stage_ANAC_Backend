@@ -159,10 +159,6 @@ class NonConformiteController extends Controller
                         ]
                     );
 
-//                    $new_fnc->push();
-//                    DB::rollBack();
-//                    return NonConformite::find(65)->nc_folder;
-
                     $path_value = $new_fnc->nc_folder->path->value."\\".$new_fnc->name;
 
                     if (!Paths::where([ 'value' => $path_value ])->exists()) {
@@ -221,7 +217,7 @@ class NonConformiteController extends Controller
 
         if (!empty($existing_fnc)) $new_fncs['existing_fnc'] = $existing_fnc;
 
-        return ResponseTrait::get('success', $new_fncs);
+        return ResponseTrait::get_success($new_fncs);
 
 
     }
@@ -398,15 +394,22 @@ class NonConformiteController extends Controller
 
             if (empty($fnc)) throw new Exception("Fnc inexistant !!");
 
+
             switch ($request->update_object)
             {
                 case 'level':
+
+                    if($this->can_modify_node($fnc) !== 2) throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+
                     $fnc->level = $request->new_value;
                     $fnc->push();
                     $fnc->refresh();
+
                     break;
                 case 'review_date':
                 {
+
+                    if($this->can_modify_node($fnc) !== 2) throw new Exception("Vous n'avez pas les droits nécessaires", -2);
 
                     $remain_ms = json_decode($request->additional_info)->remain_ms;
                     $fnc->review_date = $request->new_value;
@@ -487,12 +490,22 @@ class NonConformiteController extends Controller
 
                     break;
                 }
+                case 'isClosed':
+
+                    if ($fnc->audit_folder()->user->id != Auth::id()) throw new Exception("Vous ne pouvez pas clôturer cette non-conformité car vous en êtes pas le responsable !!");
+
+                    if($this->can_modify_node($fnc) !== 2) throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+
+                    $fnc->isClosed = $request->new_value;
+                    $fnc->push();
+                    $fnc->refresh();
+                    break;
                 default:
                     DB::rollBack();
 
                     $GLOBALS['to_broadcast'] = [];
 
-                    return ResponseTrait::get('success', 'Nothing was done');
+                    return ResponseTrait::get_success($fnc);
             }
 
         }

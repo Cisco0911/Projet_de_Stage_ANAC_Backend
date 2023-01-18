@@ -14,11 +14,11 @@ class VerifyCsrfToken extends Middleware
     protected $except = [
         //
 
-//        "register",
+        "register",
 //        "add_audit",
 //        "add_nc",
 //        "add_files",
 //        "add_c",
-//        "register"
+        "add_section"
     ];
 }

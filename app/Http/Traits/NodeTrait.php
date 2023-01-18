@@ -6,11 +6,15 @@ use App\Http\Controllers\AuditController;
 use App\Http\Controllers\CheckListController;
 use App\Http\Controllers\DossierPreuveController;
 use App\Http\Controllers\DossierSimpleController;
+use App\Http\Controllers\FichierController;
 use App\Http\Controllers\NcController;
 use App\Http\Controllers\NonConformiteController;
 use App\Http\Controllers\SectionController;
 use App\Http\Controllers\UserController;
+use App\Models\Audit;
+use App\Models\DossierSimple;
 use App\Models\Fichier;
+use App\Models\NonConformite;
 use App\Notifications\AskPermission;
 use Illuminate\Support\Facades\Auth;
 
@@ -35,6 +39,8 @@ trait NodeTrait
                 return NonConformiteController::find((int)$id);
             case "App\Models\DossierSimple":
                 return DossierSimpleController::find((int)$id);
+            case "App\Models\Fichier":
+                return FichierController::find((int)$id);
 
             default:
                 return 'nothing';
@@ -76,6 +82,16 @@ trait NodeTrait
         return $node->id."-$type";
     }
 
+    protected function get_top_lvl_parent($node)
+    {
+        if ($node instanceof Audit) return $node;
+        if ( !empty($node->parent_type) && $node->parent_type == "App\\Models\\Section" ) return $node;
+
+        if ( ($node instanceof DossierSimple) || ($node instanceof Fichier) ) return $this->get_top_lvl_parent($node->parent);
+        else if ($node instanceof NonConformite) return $node->nc_folder->audit;
+        else return $node->audit;
+    }
+
     protected function can_modify_node($node, $approved = false)
     {
         if ($approved) return 2;
@@ -92,8 +108,19 @@ trait NodeTrait
 
     protected function can_modify_valid_state($node)
     {
-        if ( $node->is_validated && Auth::id() == $node->validator_id ) return true;
-        elseif (!$node->is_validated)
+        if ( $node->is_validated)
+        {
+            if (Auth::id() == $node->validator_id) return true;
+            return false;
+        }
+
+        $top_lvl_parent = $this->get_top_lvl_parent($node);
+        if ($top_lvl_parent instanceof Audit)
+        {
+            if ($top_lvl_parent->user->id == Auth::id()) return true;
+        }
+
+        if (!$node->is_validated)
         {
             if ( (int)Auth::user()->right_lvl == 2 )
             {

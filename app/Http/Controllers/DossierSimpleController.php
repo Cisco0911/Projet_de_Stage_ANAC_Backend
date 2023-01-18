@@ -107,8 +107,10 @@ class DossierSimpleController extends Controller
                 'name' => ['required', 'string', 'max:255'],
                 'parent_id' => ['required', 'integer'],
                 'parent_type' => ['required', 'string', 'max:255'],
-                'services' => ['required', 'string'],
+                'services' => ['required', 'json'],
             ]);
+
+//            return $request;
 
             $parent = $this->find_node($request->parent_id, $request->parent_type);
 
@@ -157,7 +159,8 @@ class DossierSimpleController extends Controller
             }
             else
             {
-                throw new Exception('Le dossier existe déjà.', 0);
+                DB::rollBack();
+                return ResponseTrait::get_info('Le dossier existe déjà.');
             }
 
 
@@ -165,7 +168,7 @@ class DossierSimpleController extends Controller
         catch (\Throwable $th)
         {
             DB::rollBack();
-            return ResponseTrait::get_error($th) ;
+            return ResponseTrait::get_error($th);
         }
 
 
@@ -187,8 +190,6 @@ class DossierSimpleController extends Controller
     {
 
         DB::beginTransaction();
-
-        $goesWell = true;
 
         $cache = null;
 
@@ -231,28 +232,21 @@ class DossierSimpleController extends Controller
         }
         catch (\Throwable $th2)
         {
-            //throw $th;
-            $goesWell = false;
-        }
-
-        if($goesWell)
-        {
-            Storage::deleteDirectory($pathInStorage);
-            DB::commit(); // YES --> finalize it
-
-            $info = json_decode('{}');
-            $info->id = $cache->id; $info->type = 'ds';
-
-            NodeUpdateEvent::dispatch('ds', $info, "delete");
-
-            return ResponseTrait::get('success', $target);
-        }
-        else
-        {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return ResponseTrait::get('error', $th2->getMessage());
+            return ResponseTrait::get_error($th2);
         }
+
+
+        Storage::deleteDirectory($pathInStorage);
+        DB::commit(); // YES --> finalize it
+
+        $info = json_decode('{}');
+        $info->id = $cache->id; $info->type = 'ds';
+
+        NodeUpdateEvent::dispatch('ds', $info, "delete");
+
+        return ResponseTrait::get_success($cache);
 
     }
 
@@ -321,6 +315,37 @@ class DossierSimpleController extends Controller
 
                         $are_updated = $GLOBALS['to_broadcast'];
                     }
+
+                    break;
+                }
+                case 'name':
+                {
+
+                    if($this->can_modify_node($folder) !== 2) throw new Exception("Vous n'avez pas les droits nécessaires", -2);
+
+                    if ( Paths::where([ 'value' => "{$folder->parent->path->value}\\{$request->new_value}" ])->exists() ) throw new Exception("Un fichier du même emplacement porte déjà ce nom !", -1);
+
+                    $from = $folder->path->value;
+
+                    $folder->name = $request->new_value;
+
+                    $folder->push();
+                    $folder->refresh();
+
+                    $to = $this->update_path($folder);
+
+                    if (empty($to)) throw new Exception("Une erreur est survenue !");
+
+                    if ( Storage::exists("public\\$to") )
+                    {
+                        Storage::deleteDirectory("public\\$to");
+                        Storage::delete("public\\$to");
+                    }
+
+                    rename( storage_path("app\\public\\$from"), storage_path("app\\public\\$to") );
+
+                    $folder->push();
+                    $folder->refresh();
 
                     break;
                 }
@@ -712,7 +737,8 @@ class DossierSimpleController extends Controller
                     $nv_dossier->services()->attach($service->id);
                 }
 
-                array_push($GLOBALS['to_broadcast'], $nv_dossier);
+//                array_push($GLOBALS['to_broadcast'], $nv_dossier);
+                $GLOBALS["to_broadcast"]["{$new_folder->name}\\{$nv_dossier->name}"] = $nv_dossier;
             }
 
             $this->create_children($dossier, $nv_dossier);
@@ -758,7 +784,8 @@ class DossierSimpleController extends Controller
             }
 
 //                $new_file->path;
-            array_push($GLOBALS['to_broadcast'], $new_file);
+//            array_push($GLOBALS['to_broadcast'], $new_file);
+            $GLOBALS["to_broadcast"]["{$new_folder->name}\\{$new_file->name}"] = $new_file;
 
         }
     }
@@ -847,7 +874,8 @@ class DossierSimpleController extends Controller
                         $destination->dossiers()->save($renamed_dossier);
                         $destination->refresh();
 
-                        array_push($GLOBALS['to_broadcast'], $renamed_dossier);
+//                        array_push($GLOBALS['to_broadcast'], $renamed_dossier);
+                        $GLOBALS["to_broadcast"]["{$destination->name}\\{$renamed_dossier->name}"] = $renamed_dossier;
 
                         $renamed_dossier->path()->create(
                             [
@@ -919,7 +947,8 @@ class DossierSimpleController extends Controller
                 $destination->dossiers()->save($new_folder);
                 $destination->refresh();
 
-                array_push($GLOBALS['to_broadcast'], $new_folder);
+//                array_push($GLOBALS['to_broadcast'], $new_folder);
+                $GLOBALS["to_broadcast"]["{$destination->name}\\{$new_folder->name}"] = $new_folder;
 
                 $new_folder->path()->create(
                     [
@@ -963,13 +992,21 @@ class DossierSimpleController extends Controller
         {
             $getId = function($element) { return $this->get_broadcast_id($element); };
 
-            if (count($GLOBALS['to_broadcast']) > 0) NodeUpdateEvent::dispatch('ds', array_map( $getId, $GLOBALS['to_broadcast'] ), 'add');
+            $added_nodes_to_broadcast = [];
+            foreach ($GLOBALS['to_broadcast'] as $copiable_node)
+            {
+                array_push($added_nodes_to_broadcast, $copiable_node);
+            }
+
+            if (count($added_nodes_to_broadcast) > 0) NodeUpdateEvent::dispatch('ds', array_map( $getId, $added_nodes_to_broadcast ), 'add');
         }
         catch (\Throwable $e)
         {}
 
+        $added_nodes = json_decode( json_encode( $GLOBALS['to_broadcast'] ) );
+
         $GLOBALS['to_broadcast'] = [];
-        return ResponseTrait::get_success($new_folder);
+        return ResponseTrait::get_success($added_nodes);
 
     }
 

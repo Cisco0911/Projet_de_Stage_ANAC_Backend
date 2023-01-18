@@ -89,7 +89,7 @@ class AuditController extends Controller
                 'name' => ['required', 'string', 'max:255'],
                 'section_id' => ['required', 'integer'],
                 'services' => ['required', 'json'],
-                'inspectors' => ['required', 'string'],
+                'inspectors' => ['required', 'json'],
                 'ra_id' => ['nullable', 'integer'],
             ]);
 

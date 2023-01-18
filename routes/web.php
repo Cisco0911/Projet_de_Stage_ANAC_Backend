@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdministratorController;
 use App\Http\Controllers\UserController;
 use App\Notifications\FncReviewNotification;
 use Carbon\Carbon;
@@ -65,6 +66,13 @@ $twoFactorLimiter = config('fortify.limiters.two-factor');
 $verificationLimiter = config('fortify.limiters.verification', '6,1');
 
 
+if (Features::enabled(Features::registration())) {
+
+    Route::post('/register', [RegisteredUserController::class, 'store'])
+        ->middleware(['guest:'.config('fortify.guard')]);
+}
+
+
 Route::post('/login', [AuthenticatedSessionController::class, 'store'])
             ->middleware(array_filter([
                 'guest:'.config('fortify.guard'),
@@ -75,10 +83,17 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->name('logout');
 
 
-if (Features::enabled(Features::registration())) {
 
-    Route::post('/register', [RegisteredUserController::class, 'store'])
-        ->middleware(['guest:'.config('fortify.guard')]);
+// Password Reset...
+if (Features::enabled(Features::resetPasswords())) {
+
+    Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])
+        ->middleware(['guest:'.config('fortify.guard')])
+        ->name('password.email');
+
+    Route::post('/reset-password', [NewPasswordController::class, 'store'])
+        ->middleware(['guest:'.config('fortify.guard')])
+        ->name('password.update');
 }
 
 
@@ -88,9 +103,21 @@ Broadcast::routes(['middleware' => ['auth:sanctum']]);
 Route::middleware('auth:sanctum')->group(
     function () {
 
+        // Administrator
+        Route::middleware('administrator')->group(function () {
+
+            Route::get('administrative_data', [AdministratorController::class, 'get_data']);
+
+        });
+
+
+
+
         // Section
         Route::get('get_ss', [SectionController::class, 'get_ss']);
-        Route::post('add_ss', [SectionController::class, 'add_ss']);
+
+
+
 
         // Audit
         Route::get('get_audits', [AuditController::class, 'get_audits']);
@@ -134,6 +161,7 @@ Route::middleware('auth:sanctum')->group(
         Route::get("overview_of/{id}", [FichierController::class, 'overview_of'])
             ->name("overview.file")
             ->middleware('signed');
+        Route::get('download_file', [FichierController::class, 'download_file']);
         Route::post('add_files', [FichierController::class, 'add_files']);
         Route::delete('del_file', [FichierController::class, 'del_file']);
         Route::post('update_file', [FichierController::class, 'update_file']);
@@ -150,19 +178,12 @@ Route::middleware('auth:sanctum')->group(
         Route::post('update_folder', [DossierSimpleController::class, 'update_folder']);
         Route::post('move_folder', [DossierSimpleController::class, 'move_folder']);
         Route::post('copy_folder', [DossierSimpleController::class, 'copy_folder']);
-        Route::get('test', [DossierSimpleController::class, 'test']);
 
 
 
         // user
          Route::get('get_users', [UserController::class, 'get_users']);
          Route::post('authorization_response', [UserController::class, 'handle_permission_response']);
-
-
-
-        // Fichier de preuve
-        // Route::get('get_fdps', [FichierDePreuveController::class, 'get_fdps']);
-        // Route::post('add_fdps', [FichierDePreuveController::class, 'add_fdps']);
 
 
 
@@ -178,8 +199,11 @@ Route::middleware('auth:sanctum')->group(
 
 
 
-        // Editor
+        // NodeController
         Route::post('handle_edit', [NodeController::class, 'handle_edit']);
+        Route::post('compress', [NodeController::class, 'compress']);
+        Route::get('download_by_path', [NodeController::class, 'download_by_path']);
+        Route::post('share', [NodeController::class, 'share']);
 
 
 
@@ -400,4 +424,10 @@ Route::get('user', function()
 
         return $authUser;
     });
+
+
+
+
+// Administrator
+Route::post('add_section', [SectionController::class, 'add_section']);
 
