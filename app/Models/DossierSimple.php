@@ -44,7 +44,7 @@ class DossierSimple extends Model
 
     public function validator()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, "validator_id");
     }
 
     public function fichiers()

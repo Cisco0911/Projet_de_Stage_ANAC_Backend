@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\User;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Http\Request;
 use Laravel\Fortify\Fortify;
 use Illuminate\Support\Facades\Hash;
@@ -25,7 +26,7 @@ class FortifyServiceProvider extends ServiceProvider
     {
         //
 
-        
+
 
     }
 
@@ -40,12 +41,23 @@ class FortifyServiceProvider extends ServiceProvider
 
         Fortify::authenticateUsing(function (Request $request) {
             $user = User::where('inspector_number', $request->num_inspector)->first();
-     
+
             if ($user &&
             Hash::check($request->password, $user->password)) {
                 return $user;
             }
         });
+
+        ResetPassword::createUrlUsing(
+            function ($notifiable, $token)
+            {
+                return env("FRONTEND_URL")."/reset_password?token={$token}&email={$notifiable->getEmailForPasswordReset()}";
+//                url(route('password.reset', [
+//                    'token' => $this->token,
+//                    'email' => $notifiable->getEmailForPasswordReset(),
+//                ], false));
+            }
+        );
 
 
         Fortify::createUsersUsing(CreateNewUser::class);

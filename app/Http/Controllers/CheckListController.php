@@ -31,15 +31,18 @@ class CheckListController extends Controller
        return $checkLists;
     }
 
-    public static function find(int $id)
+    public static function find(int $id) :checkList | null
     {
         $checkList = checkList::find($id);
-        $checkList->section;
-        $checkList->services;
-        $checkList->path;
-        $checkList->audit;
-        $checkList->dossiers;
-        $checkList->fichiers;
+        if ($checkList)
+        {
+            $checkList->section;
+            $checkList->services;
+            $checkList->path;
+            $checkList->audit;
+            $checkList->dossiers;
+            $checkList->fichiers;
+        }
 
         return $checkList;
     }
@@ -62,6 +65,8 @@ class CheckListController extends Controller
             ]);
 
             $checkList = checkList::find($request->id);
+
+            if (!$checkList) throw new Exception("CheckList inexistant !!");
 
             switch ($request->update_object)
             {
@@ -139,9 +144,9 @@ class CheckListController extends Controller
         {
             $getId = function($element){ return $this->get_broadcast_id($element); };
 
-            NodeUpdateEvent::dispatch('checkList', array_map( $getId, $are_updated ), "update");
+            NodeUpdateEvent::dispatch($checkList->services()->get(), array_map( $getId, $are_updated ), "update");
         }
-        else NodeUpdateEvent::dispatch('checkList', [$this->get_broadcast_id($checkList)], "update");
+        else NodeUpdateEvent::dispatch($checkList->services()->get(), [$this->get_broadcast_id($checkList)], "update");
 
         $GLOBALS['to_broadcast'] = [];
 

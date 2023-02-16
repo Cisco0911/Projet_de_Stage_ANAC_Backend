@@ -28,6 +28,11 @@ class DossierPreuve extends Model
         return $this->belongsTo(Audit::class);
     }
 
+    public function validator()
+    {
+        return $this->belongsTo(User::class, "validator_id");
+    }
+
     public function services()
     {
         return $this->morphToMany(Service::class, 'serviable');
@@ -58,7 +63,7 @@ class DossierPreuve extends Model
         parent::boot();
 
         static::deleting(function($dp) { // before delete() method call this
-            
+
             foreach ($dp->dossiers as $key => $child_folder) $child_folder->delete();
             foreach ($dp->fichiers as $key => $child_file) $child_file->delete();
 

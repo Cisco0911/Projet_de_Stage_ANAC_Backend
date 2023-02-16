@@ -33,7 +33,7 @@ class FichierController extends Controller
      * @param int $id
      * @return Fichier
      */
-    public static function find(int $id) : Fichier
+    public static function find(int $id) : Fichier | null
     {
         $file = Fichier::find($id);
 
@@ -119,7 +119,7 @@ class FichierController extends Controller
     {
         $path = Fichier::find($id)->path->value;
 
-        return response()->file(\storage_path("app\\public\\$path"));
+        return response()->file(\storage_path("app/public/$path"));
     }
 
     /**
@@ -130,7 +130,7 @@ class FichierController extends Controller
     {
         $file = self::find($request->id);
 
-        return response()->download(\storage_path("app\\public\\{$file->path->value}"), $file->name);
+        return response()->download(\storage_path("app/public/{$file->path->value}"), $file->name);
     }
 
     /**
@@ -145,7 +145,7 @@ class FichierController extends Controller
 
         $pathInfo = pathinfo($old_name);
 
-        while (Paths::where([ 'value' => $destination->path->value.'\\'.$new_name ])->exists()) {
+        while (Paths::where([ 'value' => $destination->path->value.'/'.$new_name ])->exists()) {
             # code...
 
             $set_num = $num_copy == 1 ? "" : " ($num_copy)";
@@ -207,11 +207,11 @@ class FichierController extends Controller
 
                 $full_name = $this->getNewName($parent, $full_name);
 
-                $path_value = $parent->path->value."\\$full_name";
+                $path_value = $parent->path->value."/$full_name";
 
-                if ( Storage::exists("public\\".$path_value) ) Storage::delete("public\\".$path_value);
+                if ( Storage::exists("public/".$path_value) ) Storage::delete("public/".$path_value);
 
-                if (!Storage::exists("public\\".$path_value)) {
+                if (!Storage::exists("public/".$path_value)) {
                     # code...
 
                     $new_file = $parent->fichiers()->create(
@@ -232,13 +232,13 @@ class FichierController extends Controller
                     );
 
 
-                    if (Storage::putFileAs("public\\".$dir, $file, $full_name)) {
+                    if (Storage::putFileAs("public/".$dir, $file, $full_name)) {
 
                         $services = json_decode($request->services);
 
                         $this->add_to_services($services, $new_file->id, 'App\Models\Fichier');
 
-                        array_push($added_files, "public\\".$path->value);
+                        array_push($added_files, "public/".$path->value);
                         array_push($new_files, $new_file);
                     }
                     else
@@ -266,7 +266,7 @@ class FichierController extends Controller
 
         $getId = function($element){ return $element->id.'-f'; };
 
-        NodeUpdateEvent::dispatch('f', array_map( $getId, $new_files ), 'add');
+        NodeUpdateEvent::dispatch($new_file->services()->get(), array_map( $getId, $new_files ), 'add');
 
         $files = new \stdClass();
         $idx = 0;
@@ -279,35 +279,6 @@ class FichierController extends Controller
 
         return ResponseTrait::get_success($files);
 
-//        if($saved && empty($duplicated_files))
-//        {
-//            DB::commit(); // YES --> finalize it
-//            // $new_file->url = "http://localhost/overview_of?id=".$new_file->id;
-//            // $new_file->parent_type = "llllo";
-//
-//            $getId = function($element){ return $element->id.'-f'; };
-//
-//            NodeUpdateEvent::dispatch('f', array_map( $getId, $new_files ), 'add');
-//
-//            $good = "ok";
-//
-//            return ResponseTrait::get_success($new_files);
-//        }
-//        elseif ($saved && !empty($duplicated_files))
-//        {
-//            DB::commit(); // YES --> finalize it
-//            // $new_file->url = "http://localhost/overview_of?id=".$new_file->id;
-//            // $new_file->parent_type = "llllo";
-//
-//            $getId = function($element){ return $element->id.'-f'; };
-//
-//            NodeUpdateEvent::dispatch('f', array_map( $getId, $new_files ), 'add');
-//
-//            $good = ['msg' => 'duplicated', 'list' => $duplicated_files];
-//
-//            return ResponseTrait::get('success', $good);
-//        }
-
     }
 
     /**
@@ -319,18 +290,17 @@ class FichierController extends Controller
 
         DB::beginTransaction();
 
-        $goesWell = true;
-
-        $cache = null;
-
-
         try {
 
-            $target = Fichier::find($request->id);
+            $file = Fichier::find($request->id);
 
-            $cache = $this->format($target);
+            if (!$file) throw new Exception("Fichier inexistant !!");
 
-            $feasible = $this->can_modify_node($target);
+            $cache = $this->format($file);
+
+            $services = $file->services()->get();
+
+            $feasible = $this->can_modify_node($file);
 
             if($feasible)
             {
@@ -338,13 +308,13 @@ class FichierController extends Controller
                 {
                     // dd($request);
 
-                    $pathInStorage = "public\\".$target->path->value;
+                    $pathInStorage = "public/".$file->path->value;
 
-                    $target->delete();
+                    $file->delete();
                 }
                 else
                 {
-                    $this->ask_permission_for('deletion', $target);
+                    $this->ask_permission_for('deletion', $file);
 
                     DB::commit();
 
@@ -357,29 +327,22 @@ class FichierController extends Controller
             }
 
         }
-        catch (\Throwable $th) {
-            //throw $th;
-            $goesWell = false;
-        }
-
-        if($goesWell)
-        {
-            Storage::delete($pathInStorage);
-            DB::commit(); // YES --> finalize it
-
-            $info = json_decode('{}');
-            $info->id = $cache->id; $info->type = 'f';
-
-            NodeUpdateEvent::dispatch('f', $info, 'delete');
-
-            return ResponseTrait::get('success', $target);
-        }
-        else
+        catch (\Throwable $th)
         {
             DB::rollBack(); // NO --> some error has occurred undo the whole thing
 
-            return ResponseTrait::get('error', $th->getMessage());
+            return ResponseTrait::get_error($th);
         }
+
+        Storage::delete($pathInStorage);
+        DB::commit(); // YES --> finalize it
+
+        $info = json_decode('{}');
+        $info->id = $cache->id; $info->type = 'f';
+
+        NodeUpdateEvent::dispatch($services, $info, 'delete');
+
+        return ResponseTrait::get_success($file);
 
     }
 
@@ -391,8 +354,6 @@ class FichierController extends Controller
     {
 
         DB::beginTransaction();
-
-        $goesWell = true;
 
         $GLOBALS['to_broadcast'] = [];
 
@@ -406,6 +367,8 @@ class FichierController extends Controller
             ]);
 
             $file = Fichier::find($request->id);
+
+            if (!$file) throw new Exception("Fichier inexistant !!");
 
             switch ($request->update_object)
             {
@@ -465,7 +428,7 @@ class FichierController extends Controller
 
                     $path_info = pathinfo($from);
 
-                    if ( Paths::where([ 'value' => "{$file->parent->path->value}\\{$request->new_value}.{$path_info["extension"]}" ])->exists() ) throw new Exception("Un fichier du même emplacement porte déjà ce nom !", -1);
+                    if ( Paths::where([ 'value' => "{$file->parent->path->value}/{$request->new_value}.{$path_info["extension"]}" ])->exists() ) throw new Exception("Un fichier du même emplacement porte déjà ce nom !", -1);
 
                     $file->name = "{$request->new_value}.{$path_info["extension"]}";
 
@@ -476,13 +439,13 @@ class FichierController extends Controller
 
                     if (empty($to)) throw new Exception("Une erreur est survenue !");
 
-                    if ( Storage::exists("public\\$to") )
+                    if ( Storage::exists("public/$to") )
                     {
-                        Storage::deleteDirectory("public\\$to");
-                        Storage::delete("public\\$to");
+                        Storage::deleteDirectory("public/$to");
+                        Storage::delete("public/$to");
                     }
 
-                    rename( storage_path("app\\public\\$from"), storage_path("app\\public\\$to") );
+                    rename( storage_path("app/public/$from"), storage_path("app/public/$to") );
 
                     $file->push();
                     $file->refresh();
@@ -516,9 +479,9 @@ class FichierController extends Controller
         {
             $getId = function($element){ return $this->get_broadcast_id($element); };
 
-            NodeUpdateEvent::dispatch('f', array_map( $getId, $are_updated ), "update");
+            NodeUpdateEvent::dispatch($file->services()->get(), array_map( $getId, $are_updated ), "update");
         }
-        else NodeUpdateEvent::dispatch('f', [$this->get_broadcast_id($file)], "update");
+        else NodeUpdateEvent::dispatch($file->services()->get(), [$this->get_broadcast_id($file)], "update");
 
         $GLOBALS['to_broadcast'] = [];
 
@@ -534,7 +497,7 @@ class FichierController extends Controller
     {
         $parent = $file->parent;
 
-        $file->path->value = $parent->path->value."\\".$file->name;
+        $file->path->value = $parent->path->value."/".$file->name;
 
         $file->push();
         $file->refresh();
@@ -572,7 +535,7 @@ class FichierController extends Controller
 
             if( ($feasible != 2) || !$this->can_modify_node_deep_check($old_file) ) throw new Exception("Vous n'avez pas les droits nécessaires\nSi le parent ou le fichier est validé, veuillez faire une demande d'autorisation de modification", -3);
 
-            $from = json_decode( json_encode( 'public\\'.$old_file->path->value ) );
+            $from = json_decode( json_encode( 'public/'.$old_file->path->value ) );
 
             $destination = $new_parent;
 
@@ -583,7 +546,7 @@ class FichierController extends Controller
 //                ]
 //            );
 
-            if ( Paths::where([ 'value' => $destination->path->value.'\\'.$old_file->name ])->exists() )
+            if ( Paths::where([ 'value' => $destination->path->value.'/'.$old_file->name ])->exists() )
             {
                 switch ((int)$request->on_exist)
                 {
@@ -616,7 +579,7 @@ class FichierController extends Controller
 
                         $new_file = $old_file->refresh();
 
-                        $to = json_decode( json_encode('public\\'.$this->update_path($new_file) ) );
+                        $to = json_decode( json_encode('public/'.$this->update_path($new_file) ) );
 
                         $goes_well = Storage::move(
                             $from,
@@ -629,7 +592,7 @@ class FichierController extends Controller
                     }
                     case 3:
                     {
-                        $path = Paths::where([ 'value' => $destination->path->value.'\\'.$old_file->name ])->first();
+                        $path = Paths::where([ 'value' => $destination->path->value.'/'.$old_file->name ])->first();
 
                         $existant_file = $path->routable;
 
@@ -650,7 +613,7 @@ class FichierController extends Controller
 
                         $new_file = $old_file->refresh();
 
-                        $to = json_decode( json_encode('public\\'.$this->update_path($new_file) ) );
+                        $to = json_decode( json_encode('public/'.$this->update_path($new_file) ) );
 
                         $goes_well = Storage::move(
                             $from,
@@ -675,7 +638,7 @@ class FichierController extends Controller
 
                 $new_file = $old_file->refresh();
 
-                $to = json_decode( json_encode('public\\'.$this->update_path($new_file) ) );
+                $to = json_decode( json_encode('public/'.$this->update_path($new_file) ) );
 
                 $goes_well = Storage::move(
                     $from,
@@ -700,7 +663,7 @@ class FichierController extends Controller
         DB::commit(); // YES --> finalize it
         try
         {
-            NodeUpdateEvent::dispatch('f', [$new_file->id.'-f'], "update");
+            NodeUpdateEvent::dispatch($new_parent->services()->get(), [$new_file->id.'-f'], "update");
         }
         catch (\Throwable $e)
         {}
@@ -739,12 +702,12 @@ class FichierController extends Controller
             if( $feasible != 2 ) throw new Exception("Vous n'avez pas les droits nécessaires\nSi le parent est validé, veuillez faire une demande d'autorisation de modification", -3);
 
             $old_file = Fichier::find($request->id);
-            $from = json_decode( json_encode( 'public\\'.$old_file->path->value ) );
+            $from = json_decode( json_encode( 'public/'.$old_file->path->value ) );
 
             $destination = $new_parent;
 
 
-            if ( Paths::where([ 'value' => $destination->path->value.'\\'.$old_file->name ])->exists() )
+            if ( Paths::where([ 'value' => $destination->path->value.'/'.$old_file->name ])->exists() )
             {
                 switch ((int)$request->on_exist)
                 {
@@ -780,7 +743,7 @@ class FichierController extends Controller
 
                         $new_file->path()->create(
                             [
-                                'value' => $new_file->parent->path->value.'\\'.$new_file->name
+                                'value' => $new_file->parent->path->value.'/'.$new_file->name
                             ]
                         );
                         foreach ($destination->services as $service)
@@ -790,7 +753,7 @@ class FichierController extends Controller
 
                         $new_file = $new_file->refresh();
 
-                        $to = json_decode( json_encode('public\\'.$new_file->path->value ) );
+                        $to = json_decode( json_encode('public/'.$new_file->path->value ) );
 
                         $goes_well = Storage::copy(
                             $from,
@@ -803,7 +766,7 @@ class FichierController extends Controller
                     }
                     case 3:
                     {
-                        $path = Paths::where([ 'value' => $destination->path->value.'\\'.$old_file->name ])->first();
+                        $path = Paths::where([ 'value' => $destination->path->value.'/'.$old_file->name ])->first();
 
                         $existant_file = $path->routable;
 
@@ -831,7 +794,7 @@ class FichierController extends Controller
 
                         $new_file->path()->create(
                             [
-                                'value' => $new_file->parent->path->value.'\\'.$new_file->name
+                                'value' => $new_file->parent->path->value.'/'.$new_file->name
                             ]
                         );
                         foreach ($destination->services as $service)
@@ -841,7 +804,7 @@ class FichierController extends Controller
 
                         $new_file = $new_file->refresh();
 
-                        $to = json_decode( json_encode('public\\'.$new_file->path->value ) );
+                        $to = json_decode( json_encode('public/'.$new_file->path->value ) );
 
                         $goes_well = Storage::copy(
                             $from,
@@ -873,7 +836,7 @@ class FichierController extends Controller
 
                 $new_file->path()->create(
                     [
-                        'value' => $new_file->parent->path->value.'\\'.$new_file->name
+                        'value' => $new_file->parent->path->value.'/'.$new_file->name
                     ]
                 );
                 foreach ($destination->services as $service)
@@ -883,7 +846,7 @@ class FichierController extends Controller
 
                 $new_file = $new_file->refresh();
 
-                $to = json_decode( json_encode('public\\'.$new_file->path->value ) );
+                $to = json_decode( json_encode('public/'.$new_file->path->value ) );
 
                 $goes_well = Storage::copy(
                     $from,
@@ -905,7 +868,7 @@ class FichierController extends Controller
         DB::commit(); // YES --> finalize it
         try
         {
-            if ((int)$request->on_exist != 1 )NodeUpdateEvent::dispatch('f', [$new_file->id.'-f'], "add");
+            if ((int)$request->on_exist != 1 )NodeUpdateEvent::dispatch($new_parent->services()->get(), [$new_file->id.'-f'], "add");
         }
         catch (\Throwable $e)
         {}

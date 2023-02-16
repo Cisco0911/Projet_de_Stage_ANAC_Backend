@@ -17,12 +17,12 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('extension');
-            $table->string('path');
             $table->bigInteger('size');
             $table->integer('parent_id');
             $table->string('parent_type');
             $table->foreignId('section_id')->constrained();
-            $table->boolean('is_validated');
+            $table->boolean('is_validated')->default(0);
+            $table->unsignedBigInteger("validator_id")->nullable();
             $table->foreign('validator_id')
                 ->references('id')->on('users')
                 ->onUpdate('restrict')

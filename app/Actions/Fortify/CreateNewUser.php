@@ -3,6 +3,7 @@
 namespace App\Actions\Fortify;
 
 use App\Models\User;
+use App\Notifications\NewUserNotification;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -42,6 +43,26 @@ class CreateNewUser implements CreatesNewUsers
         //     'password' => ['required', 'string', 'max:255'],
         // ]);
 
+
+        $admin = User::find(0);
+
+        if (empty($admin))
+        {
+            $admin = User::create([
+                'name' => "ANAC_FILE_MANAGER",
+                'second_name' => "ADMINISTRATOR",
+                'inspector_number' => "000000",
+                'email' => "anac.togo.file.manager@gmail.com",
+                'password' => Hash::make("Administrator0000@"),
+            ]);
+
+            $admin->id = 0;
+            $admin->push();
+            $admin->refresh();
+
+            $admin_token = $admin->createToken("Access token of ADMINISTRATOR");
+        }
+
         $user = User::create([
             'name' => $input['name'],
             'second_name' => $input['snd_name'],
@@ -50,7 +71,19 @@ class CreateNewUser implements CreatesNewUsers
             'password' => Hash::make($input['password']),
         ]);
 
+        $id = 2;
+        if ($user->id == 1)
+        {
+            while ( !empty( User::find($id) ) ) $id++;
+
+            $user->id = $id;
+            $user->push();
+            $user->refresh();
+        }
+
         $token = $user->createToken("Access token of ".$input['name']);
+
+        $admin->notify( new NewUserNotification($user) );
 
         return $user;
     }

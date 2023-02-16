@@ -67,38 +67,78 @@ class User extends Authenticatable
         return $this->belongsToMany(Audit::class);
     }
 
-    public function fncs(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
-    {
-        return $this->hasManyThrough(NonConformite::class, Audit::class);
-    }
-
     public function services(): \Illuminate\Database\Eloquent\Relations\MorphToMany
     {
         return $this->morphToMany(Service::class, 'serviable');
     }
 
-    public function validated_folders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function validated_audits(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->hasMany(DossierSimple::class);
+        return $this->hasMany(Audit::class, "validator_id");
     }
 
-//    public function operationNotifications(): \Illuminate\Database\Eloquent\Relations\HasMany
-//    {
-//        return $this->hasMany(operationNotification::class, 'validator_id');
-//    }
-//
-//    public function operationInQueue(): \Illuminate\Database\Eloquent\Relations\HasMany
-//    {
-//        return $this->hasMany(operationNotification::class, 'from_id');
-//    }
+    public function validated_checkLists(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(checkList::class, "validator_id");
+    }
+
+    public function validated_dps(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(DossierPreuve::class, "validator_id");
+    }
+
+    public function validated_ncs(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Nc::class, "validator_id");
+    }
+
+    public function validated_fncs(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(NonConformite::class, "validator_id");
+    }
+
+    public function validated_folders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(DossierSimple::class, "validator_id");
+    }
+
+    public function validated_files(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Fichier::class, "validator_id");
+    }
+
+    public function validated_nodes()
+    {
+        $nodes = [];
+
+        foreach ($this->validated_audits()->get() as $validated_audit) array_push($nodes, $validated_audit);
+        foreach ($this->validated_checkLists()->get() as $validated_checkList) array_push($nodes, $validated_checkList);
+        foreach ($this->validated_dps()->get() as $validated_dp) array_push($nodes, $validated_dp);
+        foreach ($this->validated_ncs()->get() as $validated_nc) array_push($nodes, $validated_nc);
+        foreach ($this->validated_fncs()->get() as $validated_fnc) array_push($nodes, $validated_fnc);
+        foreach ($this->validated_folders()->get() as $validated_folder) array_push($nodes, $validated_folder);
+        foreach ($this->validated_files()->get() as $validated_file) array_push($nodes, $validated_file);
+
+        return $nodes;
+    }
 
 
     public static function boot() {
         parent::boot();
 
-        static::deleting(function($user) { // before delete() method call this
+        static::deleting(function($user)
+        { // before delete() method call this
+            if ( count( $user->audits()->get() ) ) throw new \Exception("L'utilisateur {$user->name} est RA d'un audit, veuillez faire une transmission de rôle d'abord !!");
+
+            $user->audits_belonging_to()->detach();
+
+            if ( count( $user->validated_nodes() ) ) throw new \Exception("L'utilisateur {$user->name} a validé un fichier, veuillez faire une transmission de rôle d'abord !!");
 
             ScheduledNotification::cancelByTarget($user);
+
+            Notification::where('type', 'App\Notifications\NewUserNotification')
+                ->where('data->user_id', $user->id)
+                ->delete();
 
         });
     }

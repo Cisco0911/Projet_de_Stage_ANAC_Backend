@@ -83,6 +83,20 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->name('logout');
 
 
+// Profile Information...
+//if (Features::enabled(Features::updateProfileInformation())) {
+//    Route::put('/user/profile-information', [ProfileInformationController::class, 'update'])
+//        ->middleware([config('fortify.auth_middleware', 'auth').':'.config('fortify.guard')])
+//        ->name('user-profile-information.update');
+//}
+
+// Passwords...
+if (Features::enabled(Features::updatePasswords())) {
+    Route::put('/user/password', [PasswordController::class, 'update'])
+        ->middleware([config('fortify.auth_middleware', 'auth').':'.config('fortify.guard')])
+        ->name('user-password.update');
+}
+
 
 // Password Reset...
 if (Features::enabled(Features::resetPasswords())) {
@@ -107,6 +121,18 @@ Route::middleware('auth:sanctum')->group(
         Route::middleware('administrator')->group(function () {
 
             Route::get('administrative_data', [AdministratorController::class, 'get_data']);
+            Route::post('admin_update_user', [AdministratorController::class, 'update_user']);
+            Route::post('role_exchange', [AdministratorController::class, 'role_exchange']);
+            Route::delete('delete_user', [AdministratorController::class, 'delete_user']);
+
+            Route::post('create_service', [AdministratorController::class, 'create_service']);
+            Route::delete('delete_service', [AdministratorController::class, 'delete_service']);
+            Route::post('describe_service', [AdministratorController::class, 'describe_service']);
+
+            Route::post('create_section', [AdministratorController::class, 'create_section']);
+            Route::post('describe_section', [AdministratorController::class, 'describe_section']);
+            Route::post('admin_update_section', [AdministratorController::class, 'admin_update_section']);
+            Route::delete('delete_section', [AdministratorController::class, 'delete_section']);
 
         });
 
@@ -184,6 +210,9 @@ Route::middleware('auth:sanctum')->group(
         // user
          Route::get('get_users', [UserController::class, 'get_users']);
          Route::post('authorization_response', [UserController::class, 'handle_permission_response']);
+         Route::post('update_name', [UserController::class, 'update_name']);
+         Route::post('update_second_name', [UserController::class, 'update_second_name']);
+         Route::post('update_email', [UserController::class, 'update_email']);
 
 
 
@@ -194,7 +223,6 @@ Route::middleware('auth:sanctum')->group(
 
 
         // Notification
-        Route::post('notify_response', [OperationNotificationController::class, 'notify_response']);
         Route::post('markAsRead', [UserController::class, 'markAsRead']);
 
 
@@ -220,135 +248,8 @@ Route::middleware('auth:sanctum')->group(
         );
 
 
-        Route::post('getDatasByIds',
-        function(Request $request)
-            {
+        Route::post('getDatasByIds', [NodeController::class, 'getDatasByQIds']);
 
-                function getData($request)
-                {
-                    # code...
-
-                    $format = function($element)
-                    {
-
-                        $node = json_decode($element);
-
-                        switch ($element->parent_type) {
-                            case "App\Models\Audit":
-                                $node->parent_type = 'audit';
-                                break;
-                            case "App\Models\checkList":
-                                $node->parent_type = 'checkList';
-                                break;
-                            case "App\Models\DossierPreuve":
-                                $node->parent_type = 'dp';
-                                break;
-                            case "App\Models\Nc":
-                                $node->parent_type = 'nonC';
-                                break;
-                            case "App\Models\NonConformite":
-                                $node->parent_type = 'fnc';
-                                break;
-                            case "App\Models\DossierSimple":
-                                $node->parent_type = 'ds';
-                                break;
-
-                            default:
-                                $node->parent_type = '';
-                                break;
-                        }
-
-                        return $node;
-                    };
-
-                    switch ($request->type)
-                    {
-                        case 'audit':
-                            # code...
-                            $audit = AuditController::find($request->id);
-                            $audit->front_type = 'audit';
-                            return $audit;
-                        case 'checkList':
-                            # code...
-                            $checkList = CheckListController::find($request->id);
-                            $checkList->front_type = 'checkList';
-                            return $checkList;
-                        case 'dp':
-                            # code...
-                            $dp = DossierPreuveController::find($request->id);
-                            $dp->front_type = 'dp';
-                            return $dp;
-                        case 'nonC':
-                            # code...
-                            $nonC = NcController::find($request->id);
-                            $nonC->front_type = 'nonC';
-                            return $nonC;
-                        case 'fnc':
-                            # code...
-                            $fnc = NonConformiteController::find($request->id);
-                            $fnc->front_type = 'fnc';
-                            return $fnc;
-                        case 'ds':
-                            # code...
-                            $ds = DossierSimpleController::find($request->id);
-                            $ds->front_type = 'ds';
-                            return $format($ds);
-                        case 'f':
-                            # code...
-                            $f = FichierController::find($request->id);
-                            $f->front_type = 'f';
-                            return $format($f);
-
-                        default:
-                            # code...
-                            break;
-                    }
-                    // return 'f';
-                }
-
-                $datas = [];
-
-                foreach ($request->ids as $key => $value) {
-                    # code...
-                    $id_arr = explode('-', $value);
-
-                    $new_request = new stdClass();
-                    $new_request->id = $id_arr[0]; $new_request->type = $id_arr[1];
-
-                    // $new_request->id = (int)$id_arr[0];
-                    // $new_request->type = $id_arr[1];
-
-                    array_push($datas, getData($new_request));
-
-                }
-                // if(count($datas) == 1) return $datas[0];
-                return $datas;
-            }
-        );
-
-
-        Route::get('notification_mail_view', function () {
-            $user = UserController::find(1);
-
-            return (new \App\Notifications\FncReviewNotification(75, true))
-                ->toMail($user);
-        });
-
-//        $user = UserController::find(1);
-//        $folder = DossierSimpleController::find(200);
-//
-//        return (new \App\Notifications\AskPermission($folder, "deletion"))
-//            ->toMail($user);
-
-//        $user = UserController::find(2);
-//        $validator = UserController::find(1);
-//        $folder = DossierSimpleController::find(200);
-//
-//        $attachment = new \stdClass();
-//        $attachment->Dossier = $folder->name;
-//
-//        return (new \App\Notifications\InfoNotification("Réponse de la demande d'autorisation", "Demande de modification approuvé !", json_encode($attachment), $validator))
-//            ->toMail($user);
 
     }
 );

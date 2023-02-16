@@ -46,13 +46,14 @@ class Section extends Model
     public static function boot() {
         parent::boot();
 
-        static::deleting(function($folder) { // before delete() method call this
+        static::deleting(function($section) { // before delete() method call this
 
-            foreach ($folder->dossiers as $key => $child_folder) $child_folder->delete();
-            foreach ($folder->fichiers as $key => $child_file) $child_file->delete();
+            foreach ($section->audits as $key => $audit) $audit->delete();
+            foreach ($section->dossiers as $key => $child_folder) $child_folder->delete();
+            foreach ($section->fichiers as $key => $child_file) $child_file->delete();
 
-            $folder->services()->detach();
-            $folder->path()->delete();
+            $section->services()->detach();
+            $section->path()->delete();
 
         });
     }

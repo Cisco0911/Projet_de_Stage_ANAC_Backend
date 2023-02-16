@@ -54,6 +54,7 @@ trait ResponseTrait
 
         $error_object->file = $th->getFile();
         $error_object->line = $th->getLine();
+        $error_object->trace = $th->getTrace();
         $error_object->msg = $th->getMessage();
         $error_object->code = $th->getCode();
 

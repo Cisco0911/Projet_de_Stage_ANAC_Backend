@@ -31,15 +31,18 @@ class DossierPreuveController extends Controller
        return $dps;
     }
 
-    public static function find(int $id)
+    public static function find(int $id) :DossierPreuve | null
     {
         $dp = DossierPreuve::find($id);
-        $dp->section;
-        $dp->services;
-        $dp->path;
-        $dp->audit;
-        $dp->dossiers;
-        $dp->fichiers;
+        if ($dp)
+        {
+            $dp->section;
+            $dp->services;
+            $dp->path;
+            $dp->audit;
+            $dp->dossiers;
+            $dp->fichiers;
+        }
 
         return $dp;
     }
@@ -62,6 +65,8 @@ class DossierPreuveController extends Controller
             ]);
 
             $dp = DossierPreuve::find($request->id);
+
+            if (!$dp) throw new Exception("Dossier preuve inexistant !!");
 
             switch ($request->update_object)
             {
@@ -140,9 +145,9 @@ class DossierPreuveController extends Controller
         {
             $getId = function($element){ return $this->get_broadcast_id($element); };
 
-            NodeUpdateEvent::dispatch('dp', array_map( $getId, $are_updated ), "update");
+            NodeUpdateEvent::dispatch($dp->services()->get(), array_map( $getId, $are_updated ), "update");
         }
-        else NodeUpdateEvent::dispatch('dp', [$this->get_broadcast_id($dp)], "update");
+        else NodeUpdateEvent::dispatch($dp->services()->get(), [$this->get_broadcast_id($dp)], "update");
 
         $GLOBALS['to_broadcast'] = [];
 

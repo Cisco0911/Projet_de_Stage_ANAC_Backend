@@ -18,7 +18,8 @@ return new class extends Migration
             $table->string('name')->default('CheckList');
             $table->foreignId('audit_id')->constrained();
             $table->foreignId('section_id')->constrained();
-            $table->boolean('is_validated');
+            $table->boolean('is_validated')->default(0);
+            $table->unsignedBigInteger("validator_id")->nullable();
             $table->foreign('validator_id')
                 ->references('id')->on('users')
                 ->onUpdate('restrict')

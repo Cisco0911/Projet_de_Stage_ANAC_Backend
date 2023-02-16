@@ -9,6 +9,8 @@ use App\Notifications\InfoNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use PHPUnit\Util\Exception;
 
 class UserController extends Controller
@@ -17,16 +19,19 @@ class UserController extends Controller
 
     use ResponseTrait;
 
-    public static function find(int $id) : User
+    public static function find(int $id) : User | null
     {
-        $users = User::find($id);
-        $users->services;
-        $users->audits;
-        $users->audits_belonging_to;
+        $user = User::find($id);
+        if ($user)
+        {
+            $user->services;
+            $user->audits;
+            $user->audits_belonging_to;
+        }
 //        $users->operationInQueue;
 //        $users->operationInQueue;
 
-        return $users;
+        return $user;
     }
 
     public function get_users()
@@ -371,6 +376,100 @@ class UserController extends Controller
 
         $to_user->notify( new InfoNotification($request->object, $request->msg, $request->attachment, Auth::user()) );
 
+    }
+
+    public function update_name(Request $request)
+    {
+        DB::beginTransaction();
+
+        try {
+
+            $user = $request->user();
+            $request->validate([
+                'name' => [
+                    'required',
+                    'string',
+                    Rule::unique("users")->ignore($user->id)
+                ],
+            ]);
+
+            $user->name = $request->name;
+
+            $user->push();
+            $user->refresh();
+
+        }
+        catch (\Throwable $th)
+        {
+            DB::rollBack();
+            return ResponseTrait::get_error($th);
+        }
+
+        DB::commit();
+        return ResponseTrait::get_success($user);
+    }
+
+    public function update_second_name(Request $request)
+    {
+        DB::beginTransaction();
+
+        try {
+
+            $user = $request->user();
+            $request->validate([
+                'second_name' => [
+                    'required',
+                    'string',
+                    Rule::unique("users")->ignore($user->id)
+                ],
+            ]);
+
+        }
+        catch (\Throwable $th)
+        {
+            DB::rollBack();
+            return ResponseTrait::get_error($th);
+        }
+
+        DB::commit();
+        return ResponseTrait::get_success($user);
+    }
+
+    public function update_email(Request $request)
+    {
+        DB::beginTransaction();
+
+        try {
+
+            $user = $request->user();
+            $request->validate([
+                'email' => [
+                    'required',
+                    'string',
+                    'email',
+                    'max:255',
+                    Rule::unique('users')->ignore($user->id),
+                ],
+            ]);
+//            Validator::make($request->all(), [
+//                'email' => [
+//                    'required',
+//                    'string',
+//                    'email',
+//                    'max:255',
+//                    Rule::unique('users')->ignore($user->id),
+//                ],
+//            ]);
+
+        }
+        catch (\Throwable $th)
+        {
+            DB::rollBack();
+            return ResponseTrait::get_error($th);
+        }
+
+        DB::commit();
+        return ResponseTrait::get_success($user);
     }
 
 }

@@ -15,7 +15,9 @@ return new class extends Migration
     {
         Schema::create('audit_user', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignId('user_id')->constrained()
+                ->onUpdate('no action')
+                ->onDelete('restrict');
             $table->foreignId('audit_id')->constrained();
             $table->timestamps();
         });

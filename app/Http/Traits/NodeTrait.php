@@ -14,7 +14,10 @@ use App\Http\Controllers\UserController;
 use App\Models\Audit;
 use App\Models\DossierSimple;
 use App\Models\Fichier;
+use App\Models\Nc;
 use App\Models\NonConformite;
+use App\Models\Notification;
+use App\Models\Section;
 use App\Notifications\AskPermission;
 use Illuminate\Support\Facades\Auth;
 
@@ -46,6 +49,42 @@ trait NodeTrait
                 return 'nothing';
         }
 
+    }
+
+    protected function get_children($node)
+    {
+        $children = [];
+
+        if ($node instanceof Section)
+        {
+            foreach ($node->audits()->get() as $audit)
+            {
+                array_push($children, $audit);
+            }
+        }
+        elseif ($node instanceof Audit)
+        {
+            array_push($children, $node->checklist()->first(), $node->dossier_preuve()->first(), $node->nc()->first());
+        }
+        elseif ($node instanceof Nc)
+        {
+            foreach ($node->fncs()->get() as $fnc)
+            {
+                array_push($children, $fnc);
+            }
+        }
+
+
+        foreach ($node->dossiers()->get() as $dossier)
+        {
+            array_push($children, $dossier);
+        }
+        foreach ($node->fichiers()->get() as $fichier)
+        {
+            array_push($children, $fichier);
+        }
+
+        return $children;
     }
 
     protected function get_broadcast_id($node)
@@ -95,6 +134,13 @@ trait NodeTrait
     protected function can_modify_node($node, $approved = false)
     {
         if ($approved) return 2;
+
+        $node_services_ids = array_map( function ($service){ return $service["id"]; }, $node->services->toArray() );
+        $user_services_ids = array_map( function ($service){ return $service["id"]; }, Auth::user()->services->toArray() );
+
+        $intersect = array_intersect( $node_services_ids, $user_services_ids );
+
+        if ( !count($intersect) ) return 0;
 
         if ($node->is_validated)
         {
@@ -152,6 +198,10 @@ trait NodeTrait
 
             array_push($GLOBALS['to_broadcast'], $node);
         }
+        else
+        {
+            if ( Auth::id() != $node->validator_id ) throw new \Exception("l'élément est validé ou contient un élément validé par autre que vous !!");
+        }
 
         if (!empty($node->dossiers))
         {
@@ -195,6 +245,10 @@ trait NodeTrait
             $node->push();
 
             $node->refresh();
+
+            Notification::where("type", "App\\Notifications\\AskPermission")
+                ->where("data->node_id", $node->id)
+                ->delete();
 
             array_push($GLOBALS['to_broadcast'], $node);
         }
@@ -288,6 +342,40 @@ trait NodeTrait
         $validator->notify(new AskPermission($node, $operation));
 
         return true;
+    }
+
+    protected function update_children_service($node)
+    {
+        $parent_services_ids = [];
+
+        foreach ($node->services()->get() as $service)
+        {
+            array_push($parent_services_ids, $service->id);
+        }
+
+        if ( $node instanceof Fichier ) return;
+
+        foreach ($this->get_children($node) as $child)
+        {
+            $child_services_ids = [];
+
+            foreach ($child->services()->get() as $service)
+            {
+                array_push($child_services_ids, $service->id);
+            }
+
+            $services_intersection = array_intersect($parent_services_ids, $child_services_ids);
+            if ( count($child->services()->get()) > count($services_intersection) )
+            {
+                $child->services()->detach();
+                foreach ( count($services_intersection) ? $services_intersection : $parent_services_ids as $service_id)
+                {
+                    $child->services()->attach($service_id);
+                }
+
+                $this->update_children_service($child);
+            }
+        }
     }
 
 

@@ -34,6 +34,11 @@ class Audit extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function validator()
+    {
+        return $this->belongsTo(User::class, "validator_id");
+    }
+
     public function users()
     {
         return $this->belongsToMany(User::class);

@@ -30,16 +30,19 @@ class NonConformiteController extends Controller
     use ResponseTrait;
     use NodeTrait;
 
-    public static function find(int $id)
+    public static function find(int $id) :NonConformite | null
     {
         $fnc = NonConformite::find($id);
-        $fnc->section;
-        $fnc->services;
-        $fnc->path;
-        $fnc->nc_folder;
-        $fnc->dossiers;
-        $fnc->fichiers;
-        $fnc->operation;
+        if ($fnc)
+        {
+            $fnc->section;
+            $fnc->services;
+            $fnc->path;
+            $fnc->nc_folder;
+            $fnc->dossiers;
+            $fnc->fichiers;
+            $fnc->operation;
+        }
 
         return $fnc;
     }
@@ -122,7 +125,8 @@ class NonConformiteController extends Controller
 
             $feasible = $this->can_modify_node($parent);
 
-            if( $feasible != 2 ) throw new Exception("Vous n'avez pas les droits nécessaires\nSi le parent est validé, veuillez faire une demande d'autorisation de modification", -3);
+            if( $feasible != 2 )
+                throw new Exception("Vous n'avez pas les droits nécessaires\nSi le parent est validé, veuillez faire une demande d'autorisation de modification", -3);
 
 //            return $request->nonC_id;
 //            $date = new Date();
@@ -159,7 +163,7 @@ class NonConformiteController extends Controller
                         ]
                     );
 
-                    $path_value = $new_fnc->nc_folder->path->value."\\".$new_fnc->name;
+                    $path_value = $new_fnc->nc_folder->path->value."/".$new_fnc->name;
 
                     if (!Paths::where([ 'value' => $path_value ])->exists()) {
                         # code...
@@ -168,7 +172,7 @@ class NonConformiteController extends Controller
                                 'value' => $path_value,
                             ]
                         );
-                        if (Storage::makeDirectory("public\\".$path_value)) {
+                        if (Storage::makeDirectory("public/".$path_value)) {
 
                             $services = json_decode($request->services);
 
@@ -197,7 +201,7 @@ class NonConformiteController extends Controller
         {
             foreach ($new_fncs as $key => $new_fnc) {
                 # code...
-                Storage::deleteDirectory("public\\".$new_fnc->path);
+                Storage::deleteDirectory("public/".$new_fnc->path);
             };
             DB::rollBack();
             return ResponseTrait::get_error($th);
@@ -213,7 +217,7 @@ class NonConformiteController extends Controller
             if ( !array_search($fnc->name, $existing_fnc) ) array_push($fnc_list, $fnc);
         }
 
-        NodeUpdateEvent::dispatch('fnc', array_map( $getId, $fnc_list ), 'add');
+        NodeUpdateEvent::dispatch($new_fnc->services()->get(), array_map( $getId, $fnc_list ), 'add');
 
         if (!empty($existing_fnc)) $new_fncs['existing_fnc'] = $existing_fnc;
 
@@ -232,11 +236,15 @@ class NonConformiteController extends Controller
 
         try {
 
-            $target = NonConformite::find($request->id);
+            $fnc = NonConformite::find($request->id);
 
-            $cache = $this->format($target);
+            if (!$fnc) throw new Exception("FNC inexistant !!");
 
-            $feasible = $this->can_modify_node($target);
+            $services = $fnc->services()->get();
+
+            $cache = $this->format($fnc);
+
+            $feasible = $this->can_modify_node($fnc);
 
             if($feasible)
             {
@@ -244,13 +252,13 @@ class NonConformiteController extends Controller
                 {
                     // dd($request);
 
-                    $pathInStorage = "public\\".$target->path->value;
+                    $pathInStorage = "public/".$fnc->path->value;
 
-                    $target->delete();
+                    $fnc->delete();
                 }
                 else
                 {
-                    $this->ask_permission_for('deletion', $target);
+                    $this->ask_permission_for('deletion', $fnc);
 
                     DB::commit();
 
@@ -277,9 +285,9 @@ class NonConformiteController extends Controller
             $info = json_decode('{}');
             $info->id = $cache->id; $info->type = 'fnc';
 
-            NodeUpdateEvent::dispatch('fnc', $info, "delete");
+            NodeUpdateEvent::dispatch($services, $info, "delete");
 
-            return ResponseTrait::get('success', $target);
+            return ResponseTrait::get('success', $fnc);
         }
         else
         {
@@ -526,9 +534,9 @@ class NonConformiteController extends Controller
         {
             $getId = function($element){ return $this->get_broadcast_id($element); };
 
-            NodeUpdateEvent::dispatch('fnc', array_map( $getId, $are_updated ), "update");
+            NodeUpdateEvent::dispatch($fnc->services()->get(), array_map( $getId, $are_updated ), "update");
         }
-        else NodeUpdateEvent::dispatch('fnc', [$this->get_broadcast_id($fnc)], "update");
+        else NodeUpdateEvent::dispatch($fnc->services()->get(), [$this->get_broadcast_id($fnc)], "update");
 
         $GLOBALS['to_broadcast'] = [];
 

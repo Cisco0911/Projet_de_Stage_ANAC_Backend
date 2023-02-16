@@ -29,6 +29,11 @@ class Nc extends Model
         return $this->belongsTo(Audit::class);
     }
 
+    public function validator()
+    {
+        return $this->belongsTo(User::class, "validator_id");
+    }
+
     public function fncs()
     {
         return $this->hasMany(NonConformite::class);

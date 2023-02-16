@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use SplFileInfo;
+use stdClass;
 use ZipArchive;
 use function PHPUnit\Framework\isEmpty;
 
@@ -44,6 +45,112 @@ class NodeController extends Controller
 
         $this->auditController = new AuditController;
         $this->fncController = new NonConformiteController;
+    }
+
+
+
+    function getDatasByQIds(Request $request)
+    {
+
+        function getData($request)
+        {
+            # code...
+
+            $format = function($element)
+            {
+
+                $node = json_decode($element);
+
+                switch ($element->parent_type) {
+                    case "App\Models\Audit":
+                        $node->parent_type = 'audit';
+                        break;
+                    case "App\Models\checkList":
+                        $node->parent_type = 'checkList';
+                        break;
+                    case "App\Models\DossierPreuve":
+                        $node->parent_type = 'dp';
+                        break;
+                    case "App\Models\Nc":
+                        $node->parent_type = 'nonC';
+                        break;
+                    case "App\Models\NonConformite":
+                        $node->parent_type = 'fnc';
+                        break;
+                    case "App\Models\DossierSimple":
+                        $node->parent_type = 'ds';
+                        break;
+
+                    default:
+                        $node->parent_type = '';
+                        break;
+                }
+
+                return $node;
+            };
+
+            switch ($request->type)
+            {
+                case 'audit':
+                    # code...
+                    $audit = AuditController::find($request->id);
+                    $audit->front_type = 'audit';
+                    return $audit;
+                case 'checkList':
+                    # code...
+                    $checkList = CheckListController::find($request->id);
+                    $checkList->front_type = 'checkList';
+                    return $checkList;
+                case 'dp':
+                    # code...
+                    $dp = DossierPreuveController::find($request->id);
+                    $dp->front_type = 'dp';
+                    return $dp;
+                case 'nonC':
+                    # code...
+                    $nonC = NcController::find($request->id);
+                    $nonC->front_type = 'nonC';
+                    return $nonC;
+                case 'fnc':
+                    # code...
+                    $fnc = NonConformiteController::find($request->id);
+                    $fnc->front_type = 'fnc';
+                    return $fnc;
+                case 'ds':
+                    # code...
+                    $ds = DossierSimpleController::find($request->id);
+                    $ds->front_type = 'ds';
+                    return $format($ds);
+                case 'f':
+                    # code...
+                    $f = FichierController::find($request->id);
+                    $f->front_type = 'f';
+                    return $format($f);
+
+                default:
+                    # code...
+                    break;
+            }
+            // return 'f';
+        }
+
+        $datas = [];
+
+        foreach ($request->ids as $key => $value) {
+            # code...
+            $id_arr = explode('-', $value);
+
+            $new_request = new stdClass();
+            $new_request->id = $id_arr[0]; $new_request->type = $id_arr[1];
+
+            // $new_request->id = (int)$id_arr[0];
+            // $new_request->type = $id_arr[1];
+
+            array_push($datas, getData($new_request));
+
+        }
+        // if(count($datas) == 1) return $datas[0];
+        return $datas;
     }
 
 
@@ -333,7 +440,6 @@ class NodeController extends Controller
 
         return $messages;
     }
-
 
     function handle_edit(Request $request)
     {
@@ -1252,7 +1358,7 @@ class NodeController extends Controller
         foreach ($nodes as $node)
         {
             $filePath = $node->getPathName();
-            $relativePath = "$root_name\\".substr($filePath, strlen($root_path) + 1);
+            $relativePath = "$root_name/".substr($filePath, strlen($root_path) + 1);
 
 //            return $relativePath;
 
@@ -1291,9 +1397,9 @@ class NodeController extends Controller
 
         $user_cache_folder = Auth::user()->name.Auth::id();
 
-        if (!Storage::exists("cache\\$user_cache_folder")) Storage::makeDirectory("cache\\$user_cache_folder");
+        if (!Storage::exists("cache/$user_cache_folder")) Storage::makeDirectory("cache/$user_cache_folder");
 
-        $zip_path = storage_path("app\\cache\\$user_cache_folder\\ARCHIVE.zip");
+        $zip_path = storage_path("app/cache/$user_cache_folder/ARCHIVE.zip");
 
         if ($zip->open($zip_path, ZipArchive::CREATE) === TRUE)
         {
@@ -1303,17 +1409,17 @@ class NodeController extends Controller
 
                 $node = $this->find_node($info->id, $info->model);
 
-//                return storage_path("app\\public\\{$node->path->value}");
+//                return storage_path("app/public/{$node->path->value}");
 //                $zip->addFile(storage_path("C:\laragon\www\Bibliotheque-technique--ANAC\storage\Nouveau Dossier"), $relativeNameInZipFile);
 
                 if ($node instanceof Fichier)
                 {
-                    $zip->addFile(storage_path("app\\public\\{$node->path->value}"), $node->name);
+                    $zip->addFile(storage_path("app/public/{$node->path->value}"), $node->name);
                 }
                 else
                 {
 //                    return $node;
-                    $res = $this->addContent($zip, storage_path("app\\public\\{$node->path->value}"));
+                    $res = $this->addContent($zip, storage_path("app/public/{$node->path->value}"));
                 }
             }
 
@@ -1327,10 +1433,12 @@ class NodeController extends Controller
         return $zip_path;
     }
 
+
     public function download_by_path(Request $request)
     {
         return response()->download($request->path)->deleteFileAfterSend();
     }
+
 
     public function share(Request $request)
     {
@@ -1353,7 +1461,7 @@ class NodeController extends Controller
                 {
                     $user = UserController::find($inspector_id);
 
-                    $user->notify( new SharingFileNotification( storage_path("app\\public\\{$file->path->value}") ) );
+                    $user->notify( new SharingFileNotification( storage_path("app/public/{$file->path->value}") ) );
                 }
 
                 return ResponseTrait::get_success(["one file", $nodes_info, $inspector_ids]);

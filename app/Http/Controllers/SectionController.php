@@ -16,14 +16,17 @@ class SectionController extends Controller
     use ServiableTrait;
 
 
-    public static function find(int $id)
+    public static function find(int $id) :Section | null
     {
         $section = Section::find($id);
-        $section->services;
-        $section->path;
-        $section->audit;
-        $section->dossiers;
-        $section->fichiers;
+        if ($section)
+        {
+            $section->services;
+            $section->path;
+            $section->audit;
+            $section->dossiers;
+            $section->fichiers;
+        }
 
 
         return $section;
@@ -83,7 +86,7 @@ class SectionController extends Controller
 
             $section->refresh();
 
-            Storage::makeDirectory("public\\{$section->path->value}");
+            Storage::makeDirectory("public/{$section->path->value}");
 
         }
         catch (\Throwable $th)

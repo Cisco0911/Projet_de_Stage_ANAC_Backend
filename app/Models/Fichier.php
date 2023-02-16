@@ -55,6 +55,11 @@ class Fichier extends Model
         return $this->morphTo();
     }
 
+    public function validator()
+    {
+        return $this->belongsTo(User::class, "validator_id");
+    }
+
     /**
      * @return \Illuminate\Database\Eloquent\Relations\MorphOne
      */

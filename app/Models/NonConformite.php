@@ -41,6 +41,11 @@ class NonConformite extends Model
         return $this->nc_folder->audit;
     }
 
+    public function validator()
+    {
+        return $this->belongsTo(User::class, "validator_id");
+    }
+
     public function services()
     {
         return $this->morphToMany(Service::class, 'serviable');

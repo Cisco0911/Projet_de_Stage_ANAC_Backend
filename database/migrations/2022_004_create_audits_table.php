@@ -16,9 +16,12 @@ return new class extends Migration
         Schema::create('audits', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique();
-            $table->foreignId('user_id')->constrained();
+            $table->foreignId('user_id')->constrained()
+                ->onUpdate('no action')
+                ->onDelete('restrict');
             $table->foreignId('section_id')->constrained();
-            $table->boolean('is_validated');
+            $table->boolean('is_validated')->default(0);
+            $table->unsignedBigInteger("validator_id")->nullable();
             $table->foreign('validator_id')
                 ->references('id')->on('users')
                 ->onUpdate('restrict')

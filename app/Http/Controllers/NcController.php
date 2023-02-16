@@ -30,15 +30,18 @@ class NcController extends Controller
        return $nonCs;
     }
 
-    public static function find(int $id)
+    public static function find(int $id) :Nc | null
     {
         $nonC = Nc::find($id);
-        $nonC->section;
-        $nonC->services;
-        $nonC->path;
-        $nonC->audit;
-        $nonC->dossiers;
-        $nonC->fichiers;
+        if ($nonC)
+        {
+            $nonC->section;
+            $nonC->services;
+            $nonC->path;
+            $nonC->audit;
+            $nonC->dossiers;
+            $nonC->fichiers;
+        }
 
         return $nonC;
     }
@@ -61,6 +64,8 @@ class NcController extends Controller
             ]);
 
             $nonC = Nc::find($request->id);
+
+            if (!$nonC) throw new Exception("Dossier Nc inexistant !!");
 
             switch ($request->update_object)
             {
@@ -138,9 +143,9 @@ class NcController extends Controller
         {
             $getId = function($element){ return $this->get_broadcast_id($element); };
 
-            NodeUpdateEvent::dispatch('nonC', array_map( $getId, $are_updated ), "update");
+            NodeUpdateEvent::dispatch($nonC->services()->get(), array_map( $getId, $are_updated ), "update");
         }
-        else NodeUpdateEvent::dispatch('nonC', [$this->get_broadcast_id($nonC)], "update");
+        else NodeUpdateEvent::dispatch($nonC->services()->get(), [$this->get_broadcast_id($nonC)], "update");
 
         $GLOBALS['to_broadcast'] = [];
 

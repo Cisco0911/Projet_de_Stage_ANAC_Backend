@@ -22,19 +22,21 @@ class NodeUpdateEvent implements ShouldBroadcast
 //    public $node_type;
     public $node;
     public $operation;
+    public $services;
 
     /**
      * Create a new event instance.
      *
      * @return void
      */
-    public function __construct($node_type, $node, $operation)
+    public function __construct($services, $node, $operation)
     {
         //
 
 //        $this->node_type = $node_type;
         $this->node = $node;
         $this->operation = $operation;
+        $this->services = $services;
 
     }
 
@@ -47,8 +49,9 @@ class NodeUpdateEvent implements ShouldBroadcast
     {
         $channels = [];
 
-        foreach (Auth::user()->services as $service)
+        foreach ($this->services as $service)
         {
+//            throw new \Exception( $service->id );
             array_push($channels, new PrivateChannel("nodeUpdate.{$service->id}"));
         }
 

@@ -30,20 +30,23 @@ class AuditController extends Controller
     use ResponseTrait;
     use NodeTrait;
 
-    public static function find(int $id)
+    public static function find(int $id) :Audit | null
     {
         $audit = Audit::find($id);
-        $audit->services;
-        $audit->section;
-        $audit->operation;
-        $audit->user;
-        $audit->users;
-        $audit->checkList;
-        $audit->dossier_preuve;
-        $audit->nc;
-        $audit->path;
-        $audit->dossiers;
-        $audit->fichiers;
+        if ($audit)
+        {
+            $audit->services;
+            $audit->section;
+            $audit->operation;
+            $audit->user;
+            $audit->users;
+            $audit->checkList;
+            $audit->dossier_preuve;
+            $audit->nc;
+            $audit->path;
+            $audit->dossiers;
+            $audit->fichiers;
+        }
 
         return $audit;
     }
@@ -104,7 +107,7 @@ class AuditController extends Controller
 
             if( $feasible != 2 ) throw new Exception("Vous n'avez pas les droits nécessaires", -3);
 
-            $path_value = $parent->path->value."\\".$request->name;
+            $path_value = $parent->path->value."/".$request->name;
             if (Paths::where([ 'value' => $path_value ])->exists())
             {
                 throw new Exception("L'audit existe déjà.", 0);
@@ -140,7 +143,7 @@ class AuditController extends Controller
             }
             $new_audit->refresh();
 
-            $audit_path = $new_audit->section->path->value.'\\'.$new_audit->name;
+            $audit_path = $new_audit->section->path->value.'/'.$new_audit->name;
 
 //            if (Paths::where([ 'value' => $audit_path ])->exists()) throw new Exception("L'audit existe déjà.", 0);
 
@@ -169,7 +172,7 @@ class AuditController extends Controller
 
             $pathCheckList = Paths::create(
                 [
-                    'value' => $pathAudit->value.'\\CheckList',
+                    'value' => $pathAudit->value.'/CheckList',
                     'routable_id' => $new_checkList->id,
                     'routable_type' => 'App\Models\checkList'
                 ]
@@ -177,7 +180,7 @@ class AuditController extends Controller
 
             $pathDp = Paths::create(
                 [
-                    'value' => $pathAudit->value.'\\Dossier Preuve',
+                    'value' => $pathAudit->value.'/Dossier Preuve',
                     'routable_id' => $new_dp->id,
                     'routable_type' => 'App\Models\DossierPreuve'
                 ]
@@ -185,7 +188,7 @@ class AuditController extends Controller
 
             $pathNc = Paths::create(
                 [
-                    'value' => $pathAudit->value.'\\NC',
+                    'value' => $pathAudit->value.'/NC',
                     'routable_id' => $new_nonC->id,
                     'routable_type' => 'App\Models\Nc'
                 ]
@@ -193,7 +196,9 @@ class AuditController extends Controller
 
 //            return $pathCheckList->value;
 
-            if (Storage::makeDirectory("public\\".$pathCheckList->value) && Storage::makeDirectory("public\\".$pathDp->value) && Storage::makeDirectory("public\\".$pathNc->value)) {
+            if (Storage::makeDirectory("public/".$pathCheckList->value) &&
+                Storage::makeDirectory("public/".$pathDp->value) &&
+                Storage::makeDirectory("public/".$pathNc->value)) {
 
 
                 $services = json_decode($request->services);
@@ -204,9 +209,6 @@ class AuditController extends Controller
                 $this->add_to_services($services, $new_nonC->id, 'App\Models\Nc');
 
                 array_push($audit_family, $new_audit, $new_checkList, $new_dp, $new_nonC);
-
-
-
             }
             else
             {
@@ -225,11 +227,9 @@ class AuditController extends Controller
 
         $getId = function($element){ return $this->get_broadcast_id($element); };
 
-        NodeUpdateEvent::dispatch('audit', array_map( $getId, $audit_family ), 'add');
+        NodeUpdateEvent::dispatch($new_audit->services()->get(), array_map( $getId, $audit_family ), 'add');
 
         return ResponseTrait::get_success(self::find($new_audit->id));
-
-
     }
 
     function del_audit(Request $request)
@@ -242,11 +242,13 @@ class AuditController extends Controller
 
         try {
 
-            $target = Audit::find($request->id);
+            $audit = Audit::find($request->id);
 
-            $cache = $this->format($target);
+            if (!$audit) throw new Exception("Audit inexistant !!");
 
-            $feasible = $this->can_modify_node($target);
+            $cache = $this->format($audit);
+
+            $feasible = $this->can_modify_node($audit);
 
             if($feasible)
             {
@@ -254,13 +256,13 @@ class AuditController extends Controller
                 {
                     // dd($request);
 
-                    $pathInStorage = "public\\".$target->path->value;
+                    $pathInStorage = "public/".$audit->path->value;
 
-                    $target->delete();
+                    $audit->delete();
                 }
                 else
                 {
-                    $this->ask_permission_for('deletion', $target);
+                    $this->ask_permission_for('deletion', $audit);
 
                     DB::commit();
 
@@ -286,9 +288,9 @@ class AuditController extends Controller
             $info = json_decode('{}');
             $info->id = $cache->id; $info->type = 'audit';
 
-            NodeUpdateEvent::dispatch('audit', $info, "delete");
+            NodeUpdateEvent::dispatch($cache->services, $info, "delete");
 
-            return ResponseTrait::get('success', $target);
+            return ResponseTrait::get('success', $audit);
         }
         else
         {
@@ -317,6 +319,8 @@ class AuditController extends Controller
             ]);
 
             $audit = Audit::find($request->id);
+
+            if (!$audit) throw new Exception("Audit inexistant !!");
 
             switch ($request->update_object)
             {
@@ -394,9 +398,9 @@ class AuditController extends Controller
         {
             $getId = function($element){ return $this->get_broadcast_id($element); };
 
-            NodeUpdateEvent::dispatch('audit', array_map( $getId, $are_updated ), "update");
+            NodeUpdateEvent::dispatch($audit->services()->get(), array_map( $getId, $are_updated ), "update");
         }
-        else NodeUpdateEvent::dispatch('audit', [$this->get_broadcast_id($audit)], "update");
+        else NodeUpdateEvent::dispatch($audit->services()->get(), [$this->get_broadcast_id($audit)], "update");
 
         $GLOBALS['to_broadcast'] = [];
 
