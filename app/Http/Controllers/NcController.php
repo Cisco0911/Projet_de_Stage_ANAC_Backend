@@ -15,17 +15,23 @@ class NcController extends Controller
     //
     use NodeTrait;
 
+    public static function format($nonC)
+    {
+        $nonC->services;
+        $nonC->audit;
+
+        if ($nonC->is_validated) $nonC->validator = UserController::find($nonC->validator_id);
+
+        $node = json_decode($nonC);
+
+        return $node;
+    }
+
     public function get_NonCs()
     {
        $nonCs = Nc::all();
 
-       foreach ($nonCs as $key => $nonC) {
-        # code...
-
-        $nonC->services;
-        $nonC->audit;
-
-       }
+       foreach ($nonCs as $key => $nonC) self::format($nonC);
 
        return $nonCs;
     }
@@ -41,6 +47,8 @@ class NcController extends Controller
             $nonC->audit;
             $nonC->dossiers;
             $nonC->fichiers;
+
+            if ($nonC->is_validated) $nonC->validator = UserController::find($nonC->validator_id);
         }
 
         return $nonC;

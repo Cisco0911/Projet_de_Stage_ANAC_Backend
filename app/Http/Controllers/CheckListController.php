@@ -16,17 +16,23 @@ class CheckListController extends Controller
 
     use NodeTrait;
 
+    public static function format($checkList)
+    {
+        $checkList->services;
+        $checkList->audit;
+
+        if ($checkList->is_validated) $checkList->validator = UserController::find($checkList->validator_id);
+
+        $node = json_decode($checkList);
+
+        return $node;
+    }
+
     public function get_checkLists()
     {
        $checkLists = checkList::all();
 
-       foreach ($checkLists as $key => $checkList) {
-        # code...
-
-        $checkList->services;
-        $checkList->audit;
-
-       }
+       foreach ($checkLists as $key => $checkList) self::format($checkList);
 
        return $checkLists;
     }
@@ -42,6 +48,8 @@ class CheckListController extends Controller
             $checkList->audit;
             $checkList->dossiers;
             $checkList->fichiers;
+
+            if ($checkList->is_validated) $checkList->validator = UserController::find($checkList->validator_id);
         }
 
         return $checkList;

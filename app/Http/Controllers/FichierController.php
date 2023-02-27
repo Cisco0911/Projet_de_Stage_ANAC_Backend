@@ -45,6 +45,8 @@ class FichierController extends Controller
             $file->parent;
             $file->operation;
             $file->url = URL::signedRoute("overview.file", ["id" => $file->id]);
+
+            if ($file->is_validated) $file->validator = UserController::find($file->validator_id);
         }
 
         return $file;
@@ -54,9 +56,11 @@ class FichierController extends Controller
      * @param $element
      * @return mixed
      */
-    function format($element)
+    public static function format($element)
     {
         $element->services;
+
+        if ($element->is_validated) $element->validator = UserController::find($element->validator_id);
 
         $node = json_decode($element);
 
@@ -99,14 +103,7 @@ class FichierController extends Controller
     {
        $fs = Fichier::all();
 
-       foreach ($fs as $key => $fichier) {
-        # code...
-
-        $fs[$key] = $this->format($fichier);
-
-        // $fs[$key]->url = "http://localhost/overview_of?id=".$fichier->id;
-
-       }
+       foreach ($fs as $key => $fichier) $fs[$key] = self::format($fichier);
 
        return $fs;
     }
@@ -250,6 +247,8 @@ class FichierController extends Controller
                 else throw new Exception("L'ajout du(des) fichier(s) a échoué", -100);
 
                 if(!is_null($double)) array_push($duplicated_files, $double);
+
+                ActivitiesHistoryController::record_activity($new_file, "add");
             }
 
 
@@ -302,6 +301,10 @@ class FichierController extends Controller
 
             $feasible = $this->can_modify_node($file);
 
+            $services_names = [];
+
+            foreach ($services as $service) array_push($services_names, $service->name);
+
             if($feasible)
             {
                 if ($feasible == 2)
@@ -325,6 +328,8 @@ class FichierController extends Controller
             {
                 throw new Exception("Vous n'avez pas les droits nécessaires");
             }
+
+            ActivitiesHistoryController::record_activity($file, "delete", $services_names);
 
         }
         catch (\Throwable $th)
@@ -417,6 +422,8 @@ class FichierController extends Controller
                         $are_updated = $GLOBALS['to_broadcast'];
                     }
 
+                    ActivitiesHistoryController::record_activity($file, $file->is_validated ? "validate" : "invalidate");
+
                     break;
                 }
                 case 'name':
@@ -449,6 +456,8 @@ class FichierController extends Controller
 
                     $file->push();
                     $file->refresh();
+
+                    ActivitiesHistoryController::record_activity($file, "rename");
 
                     break;
                 }
@@ -651,6 +660,8 @@ class FichierController extends Controller
             {
                 $new_file->services()->attach($service->id);
             }
+
+            ActivitiesHistoryController::record_activity($new_file, "move");
         }
         catch (\Throwable $th)
         {
@@ -855,6 +866,8 @@ class FichierController extends Controller
 
                 $new_file->refresh();
             }
+
+            ActivitiesHistoryController::record_activity($new_file, "copy");
         }
         catch (\Throwable $th)
         {

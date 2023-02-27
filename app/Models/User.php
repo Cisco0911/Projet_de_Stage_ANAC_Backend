@@ -62,6 +62,11 @@ class User extends Authenticatable
         return $this->hasMany(Audit::class);
     }
 
+    public function activities(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Activities_history::class);
+    }
+
     public function audits_belonging_to(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
         return $this->belongsToMany(Audit::class);

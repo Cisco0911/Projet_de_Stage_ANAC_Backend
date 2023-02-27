@@ -5,8 +5,15 @@ namespace App\Http\Controllers;
 use App\Http\Traits\NodeTrait;
 use App\Http\Traits\ResponseTrait;
 use App\Http\Traits\ServiableTrait;
+use App\Models\Audit;
+use App\Models\checkList;
+use App\Models\DossierPreuve;
+use App\Models\DossierSimple;
 use App\Models\Fichier;
+use App\Models\Nc;
+use App\Models\NonConformite;
 use App\Models\Paths;
+use App\Models\Section;
 use App\Notifications\SharingFileNotification;
 use Illuminate\Http\Request;
 
@@ -1529,6 +1536,37 @@ class NodeController extends Controller
 
         return ResponseTrait::get_success("GOOD");
 
+    }
+
+
+    public function get_data(Request $request)
+    {
+        $data = new stdClass();
+
+        $data->authUser = UserController::user();
+
+        $nodes = new stdClass();
+
+        $nodes->sections = SectionController::all();
+
+        $first_section = Section::first();
+
+//        $first_section->audits()->get()
+        $nodes->audits = $this->global_format(Audit::all(), "App\Models\Audit");
+        $nodes->checkLists = $this->global_format(checkList::all(), "App\Models\checkList");
+        $nodes->dps = $this->global_format(DossierPreuve::all(), "App\Models\DossierPreuve");
+        $nodes->nonCs = $this->global_format(Nc::all(), "App\Models\Nc");
+        $nodes->fncs = $this->global_format(NonConformite::all(), "App\Models\NonConformite");
+//        $first_section->fichiers()->get()
+        $nodes->fs = $this->global_format(Fichier::all(), "App\Models\Fichier");
+//        $first_section->dossiers()->get()
+        $nodes->ds = $this->global_format(DossierSimple::all(), "App\Models\DossierSimple");
+
+        $data->data = $nodes;
+
+        $data->data->services = ServiceController::get_services();
+
+        return $data;
     }
 
 

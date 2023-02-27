@@ -29,9 +29,11 @@ class DossierSimpleController extends Controller
     use ResponseTrait;
     use NodeTrait;
 
-    private function format($element)
+    public static function format($element)
     {
         $element->services;
+
+        if ($element->is_validated) $element->validator = UserController::find($element->validator_id);
 
         $node = json_decode($element);
 
@@ -67,15 +69,7 @@ class DossierSimpleController extends Controller
     {
         $ds = DossierSimple::all();
 
-        foreach ($ds as $key => $dossier) {
-            # code...
-
-//            $var = $this->demand_exist('deletion', $dossier);
-//
-//            $dossier->is_suppressing = isset($var);
-            $ds[$key] = $this->format($dossier);
-
-        }
+        foreach ($ds as $key => $dossier) $ds[$key] = self::format($dossier);
 
         return $ds;
     }
@@ -92,6 +86,8 @@ class DossierSimpleController extends Controller
             $folder->dossiers;
             $folder->fichiers;
             $folder->operation;
+
+            if ($folder->is_validated) $folder->validator = UserController::find($folder->validator_id);
         }
 
         return $folder;
@@ -166,7 +162,7 @@ class DossierSimpleController extends Controller
                 return ResponseTrait::get_info('Le dossier existe déjà.');
             }
 
-
+            ActivitiesHistoryController::record_activity($new_folder, "add");
         }
         catch (\Throwable $th)
         {
@@ -210,6 +206,10 @@ class DossierSimpleController extends Controller
 
             $feasible = $this->can_modify_node($folder);
 
+            $services_names = [];
+
+            foreach ($services as $service) array_push($services_names, $service->name);
+
             if($feasible)
             {
                 if ($feasible == 2)
@@ -234,7 +234,8 @@ class DossierSimpleController extends Controller
             {
                 throw new Exception("Vous n'avez pas les droits nécessaires");
             }
-            // RemovalEvent::dispatch('Dossier', $cache, Auth::user());
+
+            ActivitiesHistoryController::record_activity($folder, "delete", $services_names);
 
         }
         catch (\Throwable $th)
@@ -325,6 +326,8 @@ class DossierSimpleController extends Controller
                         $are_updated = $GLOBALS['to_broadcast'];
                     }
 
+                    ActivitiesHistoryController::record_activity($folder, $folder->is_validated ? "validate" : "invalidate");
+
                     break;
                 }
                 case 'name':
@@ -355,6 +358,8 @@ class DossierSimpleController extends Controller
 
                     $folder->push();
                     $folder->refresh();
+
+                    ActivitiesHistoryController::record_activity($folder, "rename");
 
                     break;
                 }
@@ -686,6 +691,8 @@ class DossierSimpleController extends Controller
             }
 
             $this->update_services($destination, $new_folder);
+
+            ActivitiesHistoryController::record_activity($new_folder, "move");
         }
         catch (\Throwable $th)
         {
@@ -1011,7 +1018,7 @@ class DossierSimpleController extends Controller
 
             }
 
-//            return $new_folder;
+            ActivitiesHistoryController::record_activity($new_folder, "copy");
 
         }
         catch (\Throwable $th)

@@ -19,6 +19,71 @@ class UserController extends Controller
 
     use ResponseTrait;
 
+    public static function user()
+    {
+        $authUser = Auth::user();
+        if ($authUser instanceof User)
+        {
+            # code...
+
+            $format = function($node)
+            {
+
+                switch ($node->operable_type) {
+                    case "App\Models\Audit":
+                        $node->front_type = 'audit';
+                        $node->node_type = 'Audit';
+                        break;
+                    case "App\Models\checkList":
+                        $node->front_type = 'checkList';
+                        $node->node_type = 'CheckList';
+                        break;
+                    case "App\Models\DossierPreuve":
+                        $node->front_type = 'dp';
+                        $node->node_type = 'Dossier Preuve';
+                        break;
+                    case "App\Models\Nc":
+                        $node->front_type = 'nonC';
+                        $node->node_type = 'NC';
+                        break;
+                    case "App\Models\NonConformite":
+                        $node->front_type = 'fnc';
+                        $node->node_type = 'FNC';
+                        break;
+                    case "App\Models\DossierSimple":
+                        $node->front_type = 'ds';
+                        $node->node_type = 'Dossier';
+                        break;
+                    case "App\Models\Fichier":
+                        $node->front_type = 'f';
+                        $node->node_type = 'Fichier';
+                        break;
+
+                    default:;
+                        break;
+                }
+
+                return json_decode($node);
+            };
+
+
+
+            $authUser->services = $authUser->services()->get();
+
+            $authUser->unread_review_notifications = $authUser->notifications()
+                ->unread()
+                ->where('type', 'App\Notifications\FncReviewNotification')
+                ->get();
+            $authUser->asking_permission_notifications = $authUser->notifications()
+                ->unread()
+                ->where('type', 'App\Notifications\AskPermission')
+                ->get();
+            $authUser->readNotifications;
+        }
+
+        return $authUser;
+    }
+
     public static function find(int $id) : User | null
     {
         $user = User::find($id);
@@ -424,6 +489,11 @@ class UserController extends Controller
                 ],
             ]);
 
+            $user->second_name = $request->second_name;
+
+            $user->push();
+            $user->refresh();
+
         }
         catch (\Throwable $th)
         {
@@ -460,6 +530,11 @@ class UserController extends Controller
 //                    Rule::unique('users')->ignore($user->id),
 //                ],
 //            ]);
+
+            $user->email = $request->email;
+
+            $user->push();
+            $user->refresh();
 
         }
         catch (\Throwable $th)

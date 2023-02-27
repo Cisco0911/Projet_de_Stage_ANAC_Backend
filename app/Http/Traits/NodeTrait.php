@@ -23,6 +23,43 @@ use Illuminate\Support\Facades\Auth;
 
 trait NodeTrait
 {
+    protected function global_format($nodes, $model)
+    {
+        $nodes_array = [];
+
+        foreach ($nodes as $node) array_push($nodes_array, $node);
+
+        $nodes = $nodes_array;
+
+        switch ($model) {
+            case "App\Models\Section":
+                return $nodes;
+            case "App\Models\Audit":
+                $format = function ($audit){ return AuditController::format($audit); };
+                return array_map($format, $nodes);
+            case "App\Models\checkList":
+                $format = function ($checkList){ return CheckListController::format($checkList); };
+                return array_map($format, $nodes);
+            case "App\Models\DossierPreuve":
+                $format = function ($dp){ return DossierPreuveController::format($dp); };
+                return array_map($format, $nodes);
+            case "App\Models\Nc":
+                $format = function ($nonC){ return NcController::format($nonC); };
+                return array_map($format, $nodes);
+            case "App\Models\NonConformite":
+                $format = function ($fnc){ return NonConformiteController::format($fnc); };
+                return array_map($format, $nodes);
+            case "App\Models\DossierSimple":
+                $format = function ($dossier){ return DossierSimpleController::format($dossier); };
+                return array_map($format, $nodes);
+            case "App\Models\Fichier":
+                $format = function ($fichier){ return FichierController::format($fichier); };
+                return array_map($format, $nodes);
+
+            default:
+                return $nodes;
+        }
+    }
 
     protected function find_node($id, $type)
     {

@@ -27,6 +27,8 @@ class AdministratorController extends Controller
     use NodeTrait;
 
 
+//    private $activities_controler;
+
 
     protected function format($element)
     {
@@ -81,6 +83,8 @@ class AdministratorController extends Controller
             ->get();
         foreach ($new_user_notifications as $key => $new_user_notification) $new_user_notifications[$key] = $this->format($new_user_notification);
         $data->new_users = $new_user_notifications;
+
+        $data->history = ActivitiesHistoryController::get_history();
 
         return $data;
     }

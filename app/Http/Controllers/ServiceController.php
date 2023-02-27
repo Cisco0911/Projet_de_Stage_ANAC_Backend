@@ -10,7 +10,7 @@ class ServiceController extends Controller
     //
 
 
-    public function get_services()
+    public static function get_services()
     {
        $services = Service::all();
 
@@ -32,7 +32,7 @@ class ServiceController extends Controller
         );
 
         return $new_c;
-        
+
     }
 
 }

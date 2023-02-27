@@ -46,15 +46,20 @@ class AuditController extends Controller
             $audit->path;
             $audit->dossiers;
             $audit->fichiers;
+
+            if ($audit->is_validated) $audit->validator = UserController::find($audit->validator_id);
         }
 
         return $audit;
     }
 
-    function format($element)
+    public static function format($element)
     {
         $element->services;
         $element->user;
+        $element->users;
+
+        if ($element->is_validated) $element->validator = UserController::find($element->validator_id);
 
         $node = json_decode($element);
 
@@ -66,15 +71,7 @@ class AuditController extends Controller
     {
        $audits = Audit::all();
 
-       foreach ($audits as $key => $audit)
-       {
-           # code...
-
-           $audit->services;
-           $audit->user;
-           $audit->users;
-
-       }
+       foreach ($audits as $key => $audit) $audits[$key] = self::format($audit);
 
        return $audits;
     }
@@ -215,6 +212,7 @@ class AuditController extends Controller
                 throw new Exception('Erreur de stockage: La création en stockage a échoué.', 1);
             }
 
+            ActivitiesHistoryController::record_activity($new_audit, "add");
 
         }
         catch (\Throwable $th2)
@@ -250,6 +248,10 @@ class AuditController extends Controller
 
             $feasible = $this->can_modify_node($audit);
 
+            $services_names = [];
+
+            foreach ($audit->services as $service) array_push($services_names, $service->name);
+
             if($feasible)
             {
                 if ($feasible == 2)
@@ -274,6 +276,7 @@ class AuditController extends Controller
                 throw new Exception("Vous n'avez pas les droits nécessaires");
             }
 
+            ActivitiesHistoryController::record_activity($audit, "delete", $services_names);
         }
         catch (\Throwable $th) {
             //throw $th;
@@ -368,6 +371,10 @@ class AuditController extends Controller
 
                         $are_updated = $GLOBALS['to_broadcast'];
                     }
+
+                    $audit->refresh();
+
+                    ActivitiesHistoryController::record_activity($audit, $audit->is_validated ? "validate" : "invalidate");
 
                     break;
                 }

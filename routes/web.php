@@ -228,6 +228,7 @@ Route::middleware('auth:sanctum')->group(
 
 
         // NodeController
+        Route::post('get_data', [NodeController::class, 'get_data']);
         Route::post('handle_edit', [NodeController::class, 'handle_edit']);
         Route::post('compress', [NodeController::class, 'compress']);
         Route::get('download_by_path', [NodeController::class, 'download_by_path']);
@@ -255,76 +256,7 @@ Route::middleware('auth:sanctum')->group(
 );
 
 
-Route::get('user', function()
-    {
-        $authUser = Auth::user();
-        if ($authUser)
-        {
-            # code...
-
-            $format = function($node)
-            {
-
-                switch ($node->operable_type) {
-                    case "App\Models\Audit":
-                        $node->front_type = 'audit';
-                        $node->node_type = 'Audit';
-                        break;
-                    case "App\Models\checkList":
-                        $node->front_type = 'checkList';
-                        $node->node_type = 'CheckList';
-                        break;
-                    case "App\Models\DossierPreuve":
-                        $node->front_type = 'dp';
-                        $node->node_type = 'Dossier Preuve';
-                        break;
-                    case "App\Models\Nc":
-                        $node->front_type = 'nonC';
-                        $node->node_type = 'NC';
-                        break;
-                    case "App\Models\NonConformite":
-                        $node->front_type = 'fnc';
-                        $node->node_type = 'FNC';
-                        break;
-                    case "App\Models\DossierSimple":
-                        $node->front_type = 'ds';
-                        $node->node_type = 'Dossier';
-                        break;
-                    case "App\Models\Fichier":
-                        $node->front_type = 'f';
-                        $node->node_type = 'Fichier';
-                        break;
-
-                    default:;
-                        break;
-                }
-
-                return json_decode($node);
-            };
-
-
-
-            $authUser->services;
-            $authUser->operationNotifications;
-//            foreach ($authUser->operationNotifications as $key => $value) {
-//                # code...
-//                $authUser->operationNotifications[$key]->operable;
-//                $authUser->operationNotifications[$key]->from;
-//                $authUser->operationNotifications[$key] = $format($authUser->operationNotifications[$key]);
-//            }
-            $authUser->unread_review_notifications = $authUser->notifications()
-                ->unread()
-                ->where('type', 'App\Notifications\FncReviewNotification')
-                ->get();
-            $authUser->asking_permission_notifications = $authUser->notifications()
-                ->unread()
-                ->where('type', 'App\Notifications\AskPermission')
-                ->get();
-            $authUser->readNotifications;
-        }
-
-        return $authUser;
-    });
+Route::get('user', [UserController::class, "user"]);
 
 
 

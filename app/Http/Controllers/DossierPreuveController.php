@@ -15,18 +15,23 @@ class DossierPreuveController extends Controller
     //
     use NodeTrait;
 
+    public static function format($dp)
+    {
+        $dp->services;
+        $dp->audit;
+
+        if ($dp->is_validated) $dp->validator = UserController::find($dp->validator_id);
+
+        $node = json_decode($dp);
+
+        return $node;
+    }
+
     public function get_Dps()
     {
        $dps = DossierPreuve::all();
 
-       foreach ($dps as $key => $dp) {
-        # code...
-
-        $dp->services;
-        $dp->audit;
-//        $dp->notifs = $this->demand_exist('modification', $dp);
-
-       }
+       foreach ($dps as $key => $dp) self::format($dp);
 
        return $dps;
     }
@@ -42,6 +47,8 @@ class DossierPreuveController extends Controller
             $dp->audit;
             $dp->dossiers;
             $dp->fichiers;
+
+            if ($dp->is_validated) $dp->validator = UserController::find($dp->validator_id);
         }
 
         return $dp;

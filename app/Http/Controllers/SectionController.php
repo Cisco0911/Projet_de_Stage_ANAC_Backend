@@ -32,6 +32,17 @@ class SectionController extends Controller
         return $section;
     }
 
+    public static function all()
+    {
+        $sections = Section::all();
+
+        foreach ($sections as $section)
+        {
+            $section->services = $section->services()->get();
+        }
+
+        return $sections;
+    }
 
     public function get_ss()
     {

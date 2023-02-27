@@ -42,43 +42,20 @@ class NonConformiteController extends Controller
             $fnc->dossiers;
             $fnc->fichiers;
             $fnc->operation;
+
+            if ($fnc->is_validated) $fnc->validator = UserController::find($fnc->validator_id);
         }
 
         return $fnc;
     }
 
-    function format($element)
+    public static function format($element)
     {
         $element->services;
 
+        if ($element->is_validated) $element->validator = UserController::find($element->validator_id);
+
         $node = json_decode($element);
-
-        // switch ($element->parent_type) {
-        //     case "App\Models\Audit":
-        //         $node->parent_type = 'audit';
-        //         break;
-        //     case "App\Models\checkList":
-        //         $node->parent_type = 'checkList';
-        //         break;
-        //     case "App\Models\DossierPreuve":
-        //         $node->parent_type = 'dp';
-        //         break;
-        //     case "App\Models\Nc":
-        //         $node->parent_type = 'nonC';
-        //         break;
-        //     case "App\Models\NonConformite":
-        //         $node->parent_type = 'fnc';
-        //         break;
-        //     case "App\Models\DossierSimple":
-        //         $node->parent_type = 'ds';
-        //         break;
-
-        //     default:
-        //         $node->parent_type = '';
-        //         break;
-        // }
-
-        // $node->url = "http://localhost/overview_of?id=".$element->id;
 
         return $node;
     }
@@ -88,12 +65,7 @@ class NonConformiteController extends Controller
     {
        $fncs = NonConformite::all();
 
-       foreach ($fncs as $key => $fnc) {
-        # code...
-
-        $fnc->services;
-
-       }
+       foreach ($fncs as $key => $fnc) $fncs[$key] = self::format($fnc);
 
        return $fncs;
     }
@@ -246,6 +218,10 @@ class NonConformiteController extends Controller
 
             $feasible = $this->can_modify_node($fnc);
 
+            $services_names = [];
+
+            foreach ($services as $service) array_push($services_names, $service->name);
+
             if($feasible)
             {
                 if ($feasible == 2)
@@ -269,6 +245,8 @@ class NonConformiteController extends Controller
             {
                 throw new Exception("Vous n'avez pas les droits nécessaires");
             }
+
+            ActivitiesHistoryController::record_activity($fnc, "delete", $services_names);
 
         }
         catch (\Throwable $th)
@@ -298,85 +276,48 @@ class NonConformiteController extends Controller
 
     }
 
-    protected function existing_reminder($fncId, $new_remain_time): bool
+    protected function existing_reminder($fncId, $new_remain_time)
     {
-        $review_reminders = ScheduledNotification::findByMeta("fncId", $fncId);
+        $filter_callback = function ($review_reminder) {
+            return !$review_reminder->isSent() && !$review_reminder->isCancelled();
+        };
 
-        $res = false;
+        $review_reminders = ScheduledNotification::findByMeta("fncId", $fncId)->filter($filter_callback);
 
-        $already = [];
+        if ( !count($review_reminders) ) return false;
 
-        foreach ($review_reminders as $review_reminder)
+        $fnc = NonConformiteController::find($fncId);
+
+        $last_date = Carbon::parse($fnc->review_date)->subRealMinute();
+
+        if ( $last_date->lessThan(Carbon::now()) )
         {
-            if ($review_reminder->isSent()) continue;
+            foreach ($review_reminders as $review_reminder) $review_reminder->cancel();
 
-            if ($review_reminder->getNotification()->isAnticipated())
+            return false;
+        }
+        else
+        {
+            foreach ($review_reminders as $review_reminder)
             {
+                if ($review_reminder->getNotification()->isAnticipated())
+                {
+                    $review_reminder->reschedule(
+                        Carbon::now()->addRealMilliseconds((int)$new_remain_time)->subRealMinute()
+                    );
+
+                    continue;
+                }
+
                 $review_reminder->reschedule(
-                    Carbon::now()->addRealMilliseconds((int)$new_remain_time)->subRealMinute()
+                    Carbon::now()->addRealMilliseconds((int)$new_remain_time)
                 );
 
-                array_push($already, -$review_reminder->getTargetId());
-
-                continue;
             }
 
-            $review_reminder->reschedule(
-                Carbon::now()->addRealMilliseconds((int)$new_remain_time)
-            );
-
-            array_push($already, $review_reminder->getTargetId());
-
-            $res = true;
+            return true;
         }
 
-        foreach ($review_reminders as $review_reminder)
-        {
-//            if ((int)$review_reminder->getNotification()->getFncId() == (int)$fncId)
-//            {
-//                if ($review_reminder->getNotification()->isAnticipated())
-//                {
-//                    $review_reminder->reschedule(
-//                        Carbon::now()->addRealMilliseconds((int)$new_remain_time)->subRealMinute()
-//                    );
-//                    continue;
-//                }
-//                $review_reminder->reschedule(
-//                    Carbon::now()->addRealMilliseconds((int)$new_remain_time)
-//                );
-//
-//                $res = true;
-//            }
-            if (!$review_reminder->isSent()) continue;
-
-            if ( $review_reminder->getNotification()->isAnticipated() && !in_array(-$review_reminder->getTargetId(), $already) )
-            {
-                $review_reminder->reschedule(
-                    Carbon::now()->addRealMilliseconds((int)$new_remain_time)->subRealMinute(),
-                    true
-                );
-
-                array_push($already, -$review_reminder->getTargetId());
-
-                continue;
-            }
-
-            if ( !in_array($review_reminder->getTargetId(), $already) )
-            {
-
-                $review_reminder->reschedule(
-                    Carbon::now()->addRealMilliseconds((int)$new_remain_time),
-                    true
-                );
-
-                array_push($already, $review_reminder->getTargetId());
-
-            }
-
-            $res = true;
-        }
-
-        return $res;
     }
 
     function update_fnc( Request $request )
@@ -413,30 +354,42 @@ class NonConformiteController extends Controller
                     $fnc->push();
                     $fnc->refresh();
 
+                    ActivitiesHistoryController::record_activity($fnc, "set_level");
+
                     break;
+                case 'opening_date':
+                {
+
+                    $opening_date = Carbon::parse($request->new_value);
+                    $created_at = Carbon::parse($fnc->created_at);
+
+                    if ($opening_date->greaterThan($created_at)) throw new Exception("La date d'ouverture ne peut être plus récent que la date de création : {$fnc->created_at}");
+
+                    $fnc->opening_date = $request->new_value;
+                    $fnc->push();
+                    $fnc->refresh();
+
+                    ActivitiesHistoryController::record_activity($fnc, "set_opening");
+
+                    break;
+                }
                 case 'review_date':
                 {
 
                     if($this->can_modify_node($fnc) !== 2) throw new Exception("Vous n'avez pas les droits nécessaires", -2);
 
                     $remain_ms = json_decode($request->additional_info)->remain_ms;
-                    $fnc->review_date = $request->new_value;
-                    $fnc->push();
-                    $fnc->refresh();
 
-                    if ( !$this->existing_reminder($fnc->id, $remain_ms) && !$fnc->isClosed )
+//                    return $this->existing_reminder($fnc->id, $remain_ms);
+
+                    if ( Carbon::now()->addRealMilliseconds((int)$remain_ms)->subRealMinute()->lessThan(Carbon::now()) ) throw new Exception("Une date passée ne peut être programé. L@O%L&NB: Cette erreur inclus la date de pré-notification qui correspond à la date renseignée moins 15 jours !");
+
+                    if ( ( !$fnc->review_date || !$this->existing_reminder($fnc->id, $remain_ms) ) && !$fnc->isClosed )
                     {
                         $inspectors = $fnc->nc_folder->audit->users;
 
                         foreach ( $inspectors as $inspector )
                         {
-                            ScheduledNotification::create(
-                                $inspector, // Target
-                                new FncReviewNotification($fnc->id), // Notification
-                                Carbon::now()->addRealMilliseconds((int)$remain_ms), // Send At
-                                ["fncId" => $fnc->id] //meta data
-                            );
-//                            $review_fnc_notification->scheduleAgainAt( Carbon::now()->addRealMilliseconds((int)$remain_ms)->subRealMinute() );
 
                             ScheduledNotification::create(
                                 $inspector, // Target
@@ -445,8 +398,21 @@ class NonConformiteController extends Controller
                                 ["fncId" => $fnc->id] //meta data
                             );
 
+                            ScheduledNotification::create(
+                                $inspector, // Target
+                                new FncReviewNotification($fnc->id), // Notification
+                                Carbon::now()->addRealMilliseconds((int)$remain_ms), // Send At
+                                ["fncId" => $fnc->id] //meta data
+                            );
+//                            $review_fnc_notification->scheduleAgainAt( Carbon::now()->addRealMilliseconds((int)$remain_ms)->subRealMinute() );
                         }
                     }
+                    $fnc->review_date = $request->new_value;
+                    $fnc->push();
+                    $fnc->refresh();
+
+                    ActivitiesHistoryController::record_activity($fnc, "set_review");
+
 //                    return "nooooooooothing";
 
                     break;
@@ -496,6 +462,8 @@ class NonConformiteController extends Controller
                         $are_updated = $GLOBALS['to_broadcast'];
                     }
 
+                    ActivitiesHistoryController::record_activity($fnc, $fnc->is_validated ? "validate" : "invalidate");
+
                     break;
                 }
                 case 'isClosed':
@@ -504,9 +472,43 @@ class NonConformiteController extends Controller
 
                     if($this->can_modify_node($fnc) !== 2) throw new Exception("Vous n'avez pas les droits nécessaires", -2);
 
+                    if ( (int)$request->new_value )
+                    {
+                        if ($fnc->review_date != null)
+                        {
+                            $review_reminders = ScheduledNotification::findByMeta("fncId", $fnc->id);
+
+                            foreach ($review_reminders as $review_reminder) if ( !$review_reminder->isCancelled() ) $review_reminder->cancel();
+
+                            $fnc->review_date = null;
+                            $fnc->push();
+                            $fnc->refresh();
+                        }
+                    }
+
                     $fnc->isClosed = $request->new_value;
                     $fnc->push();
                     $fnc->refresh();
+
+                    ActivitiesHistoryController::record_activity($fnc, "close");
+
+                    break;
+                case 'cancel_review':
+
+                    if ($fnc->review_date != null)
+                    {
+                        $review_reminders = ScheduledNotification::findByMeta("fncId", $fnc->id);
+
+                        foreach ($review_reminders as $review_reminder) if ( !$review_reminder->isCancelled() && !$review_reminder->isSent() ) $review_reminder->cancel();
+
+                        $fnc->review_date = null;
+                        $fnc->push();
+                        $fnc->refresh();
+
+                        ActivitiesHistoryController::record_activity($fnc, "cancel_review");
+
+                    }
+
                     break;
                 default:
                     DB::rollBack();
